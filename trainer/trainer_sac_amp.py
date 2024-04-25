@@ -235,3 +235,54 @@ class Trainer3(BaseTrainer):
             target_param.data.copy_(
                 (1 - self.tau) * target_param.data + self.tau * param.data
             )
+    @torch.no_grad()
+    def collect_experience(self, order, num_steps=50, do_not_skip=False):
+        if order is None:
+            order = range(len(self.environment.firms))
+        batch_size = self.environment.batch_size
+        action_dim = self.environment.action_dim
+        state_dim = self.environment.state_dim
+        n_agents = self.environment.n_agents
+
+        rewards_lst = []
+        kwargs = dict(device=self.device)
+
+        to_add = {
+            "states": torch.empty((batch_size, n_agents, state_dim), **kwargs),
+            "actions": torch.empty((batch_size, n_agents, action_dim), **kwargs),
+            'rewards': torch.empty((batch_size, n_agents, 1),  **kwargs),
+            "next_states": torch.empty((batch_size, n_agents, state_dim),  **kwargs ),
+        }
+        # First Steps
+        for firm_id in order:
+            state, actions, log_probs, _, costs = self.environment.step(firm_id)
+            to_add['states'][:, firm_id] = state
+            to_add['actions'][:, firm_id] = actions
+            to_add['rewards'][:, firm_id] = -costs
+        tensor_lst = deque([to_add], maxlen=2)
+        # Other Steps. We do not record final step
+        for step in range(num_steps):
+            tensor_lst.append({
+                'rewards': torch.empty((batch_size, n_agents, 1), **kwargs ),
+                "next_states": torch.empty((batch_size, n_agents, state_dim), **kwargs ),
+                "actions": torch.empty((batch_size, n_agents, action_dim),  **kwargs ),
+                "states": torch.empty((batch_size, n_agents, state_dim), **kwargs ),
+            }
+            )
+            for firm_id in order:
+                state, actions, log_probs, prev_revenue, costs = self.environment.step(firm_id)
+
+                tensor_lst[-2]['rewards'][:, firm_id, :] += prev_revenue
+                tensor_lst[-2]['next_states'][:, firm_id] = state
+                tensor_lst[-1]['states'][:, firm_id] = state
+                tensor_lst[-1]['actions'][:, firm_id] = actions
+            to_buffer = tensor_lst[-2]
+            rewards = to_buffer['rewards'] / self.environment.market.start_gains
+            self.buffer.add_batch(
+                x=to_buffer['states'],
+                x_next=to_buffer['next_states'],
+                actions=to_buffer['actions'],
+                rewards=rewards,
+            )
+            rewards_lst.append(rewards)
+        return rewards_lst

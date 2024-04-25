@@ -25,7 +25,7 @@ env = BatchedEnvironment(market_kwargs,
                          batch_size=512)
 critic = CentralizedCritic2
 trainer = TrainerSAC(env, q_critic=critic, batch_size=512)
-trainer.train_epoch()
+# trainer.train_epoch()
 trainer.train(1000, episode_length=30)
 #
 # env.change_batch_size(1)

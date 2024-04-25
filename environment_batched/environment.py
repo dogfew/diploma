@@ -43,6 +43,7 @@ class BatchedEnvironment:
             ]
 
         self.state_dim = get_state_dim(self.market, self.limit)
+        self.action_dim = get_action_dim(self.market, self.limit)
         self.policies = [policy_class(hidden_dim=hidden_dim,
                                       state_dim=self.state_dim,
                                       n_branches=self.market.n_branches,
@@ -61,6 +62,9 @@ class BatchedEnvironment:
             self.market.price_matrix.shape[2] + self.limit * self.market.price_matrix.shape[2],  # percent to use
             self.market.price_matrix.shape[2]  # price change
         ]
+    @property
+    def n_agents(self):
+        return self.market.max_id
 
     def change_batch_size(self, batch_size):
         self.batch_size = batch_size
@@ -109,12 +113,9 @@ class BatchedEnvironment:
             state_info['limits'] = torch.tensor([firm.limit[0] for firm in self.firms]).cpu().numpy()
         percent_to_buy, percent_to_sale, percent_to_use, prices = torch.split(actions_concatenated.cpu(),
                                                                               self.actions_split_sizes)
-        if percent_to_use.shape[0] == 2 * self.market.n_branches:
-            percent_to_use = percent_to_use.numpy()
-            percent_to_use[self.market.n_branches:] *= (1 - percent_to_use[:self.market.n_branches])
         policy_info = {'percent_to_buy': percent_to_buy[:-1].unflatten(-1, self.market.price_matrix.shape[1:]).numpy(),
                        'percent_to_sale': percent_to_sale.numpy(),
-                       'percent_to_use': percent_to_use,
+                       'percent_to_use': percent_to_use.numpy(),
                        'prices': prices.numpy()}
 
         self.state_history.append(state_info)
