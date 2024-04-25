@@ -6,6 +6,7 @@
       <excludeFolder url="file://$MODULE_DIR$/.virtual_documents" />
       <excludeFolder url="file://$MODULE_DIR$/trash" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
+      <excludeFolder url="file://$MODULE_DIR$/build" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.11 (diploma)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
