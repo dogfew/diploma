@@ -92,12 +92,3 @@ def price_change_function(current_prices, change):
     # return current_prices * torch.where(change <= 0.5, change + 0.5, change * 2)
 
 
-if __name__ == "__main__":
-    prices = torch.tensor([10, 10, 10])
-    prices = price_change_function(prices, change=torch.tensor([0.5, 1, 0]))
-    prices = price_change_function(prices, change=torch.tensor([0.5, 0, 1]))
-    prices = price_change_function(prices, change=torch.tensor([0.5, 0.25, 0.75]))
-    prices = price_change_function(prices, change=torch.tensor([0.5, 0.75, 0.25]))
-    prices = price_change_function(prices, change=torch.tensor([0.5, 2 / 3, 1 / 3]))
-    prices = price_change_function(prices, change=torch.tensor([0.5, 1 / 3, 2 / 3]))
-    print(prices)

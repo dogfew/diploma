@@ -8,7 +8,7 @@ from copy import deepcopy
 from tensordict import TensorDictBase, TensorDict
 
 from .market import BatchedMarket
-from .firm import BatchedFirm, BatchedLimitFirm, BatchedLimitStrangeFirm
+from .firm import BatchedFirm, BatchedLimitFirm, BatchedLimitProductionFirm
 from .utils import get_state_log, get_state_dim, get_action_dim, process_actions
 
 
@@ -43,7 +43,7 @@ class BatchedEnvironment:
                 for fun in prod_functions
             ]
         else:
-            firm_class = {'production': BatchedLimitStrangeFirm,
+            firm_class = {'production': BatchedLimitProductionFirm,
                           'finance': BatchedLimitFirm}[target]
             self.firms = [
                 firm_class(fun, inv_fun, self.market, batch_size=batch_size)

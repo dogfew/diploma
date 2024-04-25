@@ -130,12 +130,3 @@ class BatchedMarket:
         )
         return representation
 
-
-if __name__ == "__main__":
-    market = BatchedMarket(64)
-    market.generate_id()
-    market.generate_id()
-    market.generate_id()
-
-    print(market.change_batch_size(16))
-    # Всё ок

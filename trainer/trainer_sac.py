@@ -26,7 +26,7 @@ class TrainerSAC(BaseTrainer):
         gamma=0.99,
         tau=0.95,
         entropy_reg=0.01,
-        learning_rates=(3e-4, 3e-4),
+        learning_rates=(6e-4, 6e-4),
         buffer_size=8192,
         batch_size=32,
         max_grad_norm=1,
@@ -292,4 +292,4 @@ class TrainerSAC(BaseTrainer):
             actions=all_actions[:-1].flatten(0, 1),
             rewards=all_rewards[:-1].flatten(0, 1) / self.environment.market.start_gains,
         )
-        return all_rewards.permute(0, 2, 1, 3) * self.environment.market.start_gains
+        return all_rewards.permute(0, 2, 1, 3)
