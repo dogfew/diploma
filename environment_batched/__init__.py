@@ -1,5 +1,5 @@
 from .market import BatchedMarket
-from .firm import BatchedFirm
+from .firm import BatchedFirm, BatchedLimitStrangeFirm, BatchedLimitFirm
 from .prod_functions import BatchedLeontief, CobbDouglas
 from .environment import BatchedEnvironment
 

@@ -154,6 +154,7 @@ class BatchedLimitFirm(BatchedFirm):
         invest_function,
         market,
         batch_size=1,
+        start_capital=2,
         is_deprecating=True,
     ):
         super().__init__(
@@ -167,8 +168,9 @@ class BatchedLimitFirm(BatchedFirm):
             device=self.device,
             dtype=self.market.dtype,
         )
+        self.start_capital = start_capital
         self.current_step = 1
-        self.capital[:, 0] = 1
+        self.capital[:, 0] = start_capital
         self.is_deprecating = is_deprecating
 
     def change_batch_size(self, batch_size):
@@ -178,7 +180,7 @@ class BatchedLimitFirm(BatchedFirm):
     def reset(self):
         super().reset()
         self.capital.fill_(0)
-        self.capital[:, 0] = 1
+        self.capital[:, 0] = self.start_capital
         self.current_step = 1
 
     @property
@@ -196,6 +198,7 @@ class BatchedLimitFirm(BatchedFirm):
         self.capital[:, self.current_step] = new_limits.flatten()
         self.current_step += 1
         self.current_step %= self.deprecation_steps + 1
+        return used_reserves, new_limits
 
     def produce(self, input_reserves: torch.Tensor):
         """
@@ -208,6 +211,7 @@ class BatchedLimitFirm(BatchedFirm):
         )
         self.reserves -= used_reserves
         self.reserves += new_reserves
+        return used_reserves, new_reserves
 
     def step(
         self,
@@ -246,6 +250,41 @@ class BatchedLimitFirm(BatchedFirm):
         )
         return representation
 
+
+class BatchedLimitStrangeFirm(BatchedLimitFirm):
+    """
+    It's the same firm, however only cares about production volumes.
+    """
+    def step(
+        self,
+        percent_to_buy: torch.Tensor,
+        percent_to_sale: torch.Tensor,
+        percent_to_use: torch.Tensor,
+        prices: torch.Tensor = None,
+    ) -> tuple[float, float]:
+        """
+        :param percent_to_buy: [n_firms, n_branches]
+        :param percent_to_sale: [n_branches]
+        :param percent_to_use: [2 * n_branches]
+        :param prices: [n_branches]
+        :return: revenue, costs
+        """
+        percent_to_use_prod, percent_to_use_invest = torch.split(
+            percent_to_use, [self.n_branches, self.n_branches], dim=1
+        )
+        input_prod = (self.reserves * percent_to_use_prod).round().type(torch.int64)
+        input_invest = (self.reserves * percent_to_use_invest).round().type(torch.int64)
+        self.receive_revenue()
+        self.buy(percent_to_buy)
+        used_reserves_invest, new_limits = self.invest(input_invest)
+        used_reserves_produce, new_reserves = self.produce(input_prod)
+        self.define_prices(prices)
+        self.sell(percent_to_sale)
+        revenue = new_reserves.sum(dim=1, keepdims=True)
+        revenue -= - used_reserves_invest.sum(dim=1, keepdims=True)
+        revenue -= used_reserves_produce.sum(dim=1, keepdims=True)
+        costs = torch.zeros_like(revenue)
+        return revenue.log1p(), costs
 
 if __name__ == "__main__":
     from environment_batched.market import BatchedMarket
