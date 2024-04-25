@@ -25,7 +25,7 @@ def in_notebook():
 
 
 class BaseTrainer:
-    def __init__(self, environment, device='cuda'):
+    def __init__(self, environment, device="cuda"):
         self.environment = environment
         self.n_agents = len(self.environment.firms)
         self.buffer = ReplayBufferOld(50_000)
@@ -33,7 +33,7 @@ class BaseTrainer:
         self.target_policies = self.environment.target_policies
         self.in_notebook = in_notebook()
 
-        colors = plt.cm.get_cmap('Set1').colors
+        colors = plt.cm.get_cmap("Set1").colors
         self.color_map = {
             firm_id: colors[firm_id % len(colors)]
             for firm_id in range(len(environment.firms))
@@ -124,7 +124,9 @@ class BaseTrainer:
             next_state, _, _, revenue, _ = self.environment.step(firm_id)
             to_add["next_states"].append(next_state)
             if isinstance(revenue, int):
-                to_add["rewards"].append(torch.tensor([revenue - costs], device=self.device))
+                to_add["rewards"].append(
+                    torch.tensor([revenue - costs], device=self.device)
+                )
             else:
                 to_add["rewards"].append(revenue - costs)
         if do_not_skip:

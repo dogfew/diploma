@@ -7,17 +7,17 @@ from typing import Callable
 
 class BatchedMarket:
     def __init__(
-            self,
-            n_branches: int = 2,
-            min_price: float = 1,
-            base_price: float = 100,
-            start_gains: int = 250,
-            start_volumes: int = 1,
-            deprecation_steps: int = 2,
-            batch_size=1,
-            max_price: int = None,
-            dtype=torch.int64,
-            device='cuda'
+        self,
+        n_branches: int = 2,
+        min_price: float = 1,
+        base_price: float = 100,
+        start_gains: int = 250,
+        start_volumes: int = 1,
+        deprecation_steps: int = 2,
+        batch_size=1,
+        max_price: int = None,
+        dtype=torch.int64,
+        device="cuda",
     ):
         """
         :param n_branches: Число отраслей
@@ -28,8 +28,12 @@ class BatchedMarket:
         self.volume_matrix: torch.Tensor = torch.zeros(
             (batch_size, 0, n_branches), dtype=self.dtype, device=device
         )
-        self.price_matrix: torch.Tensor = torch.empty((batch_size, 0, n_branches), dtype=self.dtype, device=device)
-        self.gains: torch.Tensor = torch.zeros((batch_size, 0), dtype=self.dtype, device=device)
+        self.price_matrix: torch.Tensor = torch.empty(
+            (batch_size, 0, n_branches), dtype=self.dtype, device=device
+        )
+        self.gains: torch.Tensor = torch.zeros(
+            (batch_size, 0), dtype=self.dtype, device=device
+        )
 
         # Prices
         self.min_price = min_price
@@ -79,13 +83,17 @@ class BatchedMarket:
         self.price_matrix = torch.cat(
             (
                 self.price_matrix,
-                torch.full(shape, self.base_price, dtype=self.dtype, device=self.device),
+                torch.full(
+                    shape, self.base_price, dtype=self.dtype, device=self.device
+                ),
             ),
             dim=1,
         )
         self.gains = torch.cat(
-            (self.gains, torch.zeros((self.batch_size, 1),
-                                     dtype=self.dtype, device=self.device)),
+            (
+                self.gains,
+                torch.zeros((self.batch_size, 1), dtype=self.dtype, device=self.device),
+            ),
             dim=1,
         )
 
@@ -95,7 +103,7 @@ class BatchedMarket:
         return self.max_id
 
     def process_purchases(
-            self, purchase_matrix: torch.Tensor, sellers_gains: torch.Tensor
+        self, purchase_matrix: torch.Tensor, sellers_gains: torch.Tensor
     ):
         self.volume_matrix -= purchase_matrix
         self.gains += sellers_gains
@@ -123,7 +131,7 @@ class BatchedMarket:
         return representation
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     market = BatchedMarket(64)
     market.generate_id()
     market.generate_id()

@@ -28,7 +28,7 @@ class ReplayBufferOld:
 
 
 class ReplayBuffer:
-    def __init__(self, state_dim, action_dim, n_firms, size=65536, device='cuda'):
+    def __init__(self, state_dim, action_dim, n_firms, size=65536, device="cuda"):
         self._maxsize = size
         self._storage_x = torch.empty((size, n_firms, state_dim), device=device)
         self._storage_x_next = torch.empty((size, n_firms, state_dim), device=device)

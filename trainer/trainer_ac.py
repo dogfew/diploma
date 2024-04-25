@@ -12,15 +12,15 @@ from models.utils.preprocessing import get_state_dim, get_action_dim
 
 class TrainerAC(BaseTrainer):
     def __init__(
-            self,
-            environment,
-            q_critic,
-            gamma=0.99,
-            tau=0.95,
-            learning_rates=(3e-4, 3e-4),
-            batch_size=32,
-            max_grad_norm=1,
-            device="cuda",
+        self,
+        environment,
+        q_critic,
+        gamma=0.99,
+        tau=0.95,
+        learning_rates=(3e-4, 3e-4),
+        batch_size=32,
+        max_grad_norm=1,
+        device="cuda",
     ):
         super().__init__(environment)
 
@@ -113,8 +113,8 @@ class TrainerAC(BaseTrainer):
                     )
                     next_q_values = self.q_critic_target_network(x_next, actions_next)
                     q_values_target = (
-                            rewards.squeeze(-1)[:, firm_id]
-                            + self.gamma * next_q_values[:, firm_id]
+                        rewards.squeeze(-1)[:, firm_id]
+                        + self.gamma * next_q_values[:, firm_id]
                     )
                 q_values = self.q_critic_network(x, actions)[:, firm_id]
                 critic_loss = self.critic_loss(q_values, q_values_target)
@@ -134,7 +134,7 @@ class TrainerAC(BaseTrainer):
                 )
                 q_values = self.q_critic_network(x, actions)[:, firm_id]
                 actor_loss = (
-                        log_probs_firm * self.entropy_reg - q_values.unsqueeze(1)
+                    log_probs_firm * self.entropy_reg - q_values.unsqueeze(1)
                 ).mean()
                 # Optimize for Actor[firm_id]
                 self.actor_optimizers[firm_id].zero_grad()
@@ -166,18 +166,18 @@ class TrainerAC(BaseTrainer):
     @torch.no_grad()
     def _soft_update_target_network(self):
         for target_policy_network, policy_network in zip(
-                self.target_policies, self.policies
+            self.target_policies, self.policies
         ):
             for target_param, param in zip(
-                    target_policy_network.parameters(), policy_network.parameters()
+                target_policy_network.parameters(), policy_network.parameters()
             ):
                 target_param.data.copy_(
                     (1 - self.tau) * target_param.data + self.tau * param.data
                 )
 
         for target_param, param in zip(
-                self.q_critic_target_network.parameters(),
-                self.q_critic_network.parameters(),
+            self.q_critic_target_network.parameters(),
+            self.q_critic_network.parameters(),
         ):
             target_param.data.copy_(
                 (1 - self.tau) * target_param.data + self.tau * param.data

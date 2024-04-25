@@ -14,18 +14,19 @@ from torchrl.envs import EnvBase
 
 
 class EnvironmentTorchRL(EnvBase):
-    def __init__(
-            self,
-            market_kwargs,
-            prod_functions,
-            device='cuda'
-    ):
-        super().__init__(device=device, dtype=..., batch_size=..., )
+    def __init__(self, market_kwargs, prod_functions, device="cuda"):
+        super().__init__(
+            device=device,
+            dtype=...,
+            batch_size=...,
+        )
 
         self.market = BatchedMarket(**market_kwargs, device=device)
         self.state_size = get_state_dim(self.market)
         self.action_size = get_action_dim(self.market, limit=False)
-        self.firms = [BatchedFirm(fun, self.market, device=device) for fun in prod_functions]
+        self.firms = [
+            BatchedFirm(fun, self.market, device=device) for fun in prod_functions
+        ]
         self.episode = 0
 
     @property
@@ -37,17 +38,20 @@ class EnvironmentTorchRL(EnvBase):
         firm_id = self.episode % len(self.firms)  # ходит по факту только одна фирма
         firm = self.firms[firm_id]
         processed_actions = map(
-            lambda x: x.to(self.market.device), process_actions(action, self.market.price_matrix.shape)
+            lambda x: x.to(self.market.device),
+            process_actions(action, self.market.price_matrix.shape),
         )
 
         revenue, costs = firm.step(*processed_actions)
 
         out_tensordict = TensorDict(
-            dict(state=self.state,
-                 reward=revenue - costs,
-                 firm_id=torch.full(tensordict.batch_size, firm_id),
-                 done=False),
-            batch_size=tensordict.batch_size
+            dict(
+                state=self.state,
+                reward=revenue - costs,
+                firm_id=torch.full(tensordict.batch_size, firm_id),
+                done=False,
+            ),
+            batch_size=tensordict.batch_size,
         )
 
         return out_tensordict
@@ -83,7 +87,8 @@ class EnvironmentTorchRL(EnvBase):
         actions_concatenated = torch.concatenate(actions, dim=-1)
         log_probs_concatenated = torch.concatenate(log_probs, dim=-1)
         processed_actions = map(
-            lambda x: x.to(self.market.device), process_actions(actions, self.market.price_matrix.shape)
+            lambda x: x.to(self.market.device),
+            process_actions(actions, self.market.price_matrix.shape),
         )
         revenue, costs = firm.step(*processed_actions)
         self.revenues[firm_id].append(revenue)

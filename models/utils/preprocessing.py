@@ -54,11 +54,18 @@ def get_state_log(market, firm):
         reserves_state,  # [0, log10)
         finance_state,  # [-1, 1]
     ]
-    if hasattr(firm, 'limit'):
-        limit_state = torch.tensor(
-            [firm.limit, firm.capital.type(torch.float32).mean(dim=0, keepdim=True)],
-            device=market.device
-        ).log1p().nan_to_num(0, 0, 0)
+    if hasattr(firm, "limit"):
+        limit_state = (
+            torch.tensor(
+                [
+                    firm.limit,
+                    firm.capital.type(torch.float32).mean(dim=0, keepdim=True),
+                ],
+                device=market.device,
+            )
+            .log1p()
+            .nan_to_num(0, 0, 0)
+        )
         state_lst.append(limit_state)
     concatenated_state = torch.concatenate(state_lst)
     return concatenated_state.type(torch.float32)

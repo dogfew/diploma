@@ -18,24 +18,29 @@ class BatchedEnvironment:
     """
 
     def __init__(
-            self,
-            market_kwargs,
-            policy_class,
-            prod_functions,
-            batch_size=16,
-            hidden_dim=32,
-            device='cuda',
-            invest_functions=None,
+        self,
+        market_kwargs,
+        policy_class,
+        prod_functions,
+        batch_size=16,
+        hidden_dim=32,
+        device="cuda",
+        invest_functions=None,
     ):
         self.batch_size = batch_size
         self.limit = invest_functions is not None
 
         # Market
-        self.market = BatchedMarket(**market_kwargs, batch_size=batch_size, device=device)
+        self.market = BatchedMarket(
+            **market_kwargs, batch_size=batch_size, device=device
+        )
 
         # Firms
         if invest_functions is None:
-            self.firms = [BatchedFirm(fun, self.market, batch_size=batch_size) for fun in prod_functions]
+            self.firms = [
+                BatchedFirm(fun, self.market, batch_size=batch_size)
+                for fun in prod_functions
+            ]
         else:
             self.firms = [
                 BatchedLimitFirm(fun, inv_fun, self.market, batch_size=batch_size)
@@ -44,11 +49,16 @@ class BatchedEnvironment:
 
         self.state_dim = get_state_dim(self.market, self.limit)
         self.action_dim = get_action_dim(self.market, self.limit)
-        self.policies = [policy_class(hidden_dim=hidden_dim,
-                                      state_dim=self.state_dim,
-                                      n_branches=self.market.n_branches,
-                                      n_firms=self.market.n_firms,
-                                      limit=self.limit).to(device) for _ in self.firms]
+        self.policies = [
+            policy_class(
+                hidden_dim=hidden_dim,
+                state_dim=self.state_dim,
+                n_branches=self.market.n_branches,
+                n_firms=self.market.n_firms,
+                limit=self.limit,
+            ).to(device)
+            for _ in self.firms
+        ]
         self.target_policies = [deepcopy(policy) for policy in self.policies]
         self.limit = invest_functions is not None
 
@@ -59,9 +69,11 @@ class BatchedEnvironment:
         self.actions_split_sizes = [
             math.prod(self.market.price_matrix.shape[1:]) + 1,  # percent to buy
             self.market.price_matrix.shape[2],  # percent to sale
-            self.market.price_matrix.shape[2] + self.limit * self.market.price_matrix.shape[2],  # percent to use
-            self.market.price_matrix.shape[2]  # price change
+            self.market.price_matrix.shape[2]
+            + self.limit * self.market.price_matrix.shape[2],  # percent to use
+            self.market.price_matrix.shape[2],  # price change
         ]
+
     @property
     def n_agents(self):
         return self.market.max_id
@@ -103,20 +115,33 @@ class BatchedEnvironment:
 
     @torch.no_grad()
     def step_and_record(self, firm_id):
-        state, actions_concatenated, log_probs_concatenated, revenue, costs = map(lambda x: x[0], self.step(firm_id))
-        state_info = {'price_matrix': self.market.price_matrix[0].cpu().numpy(),
-                      'volume_matrix': self.market.volume_matrix[0].cpu().numpy(),
-                      'finance': self.market.gains[0].cpu().numpy() + np.array(
-                          [firm.financial_resources[0].item() for firm in self.firms]),
-                      'reserves': torch.stack([firm.reserves[0] for firm in self.firms]).cpu().numpy()}
+        state, actions_concatenated, log_probs_concatenated, revenue, costs = map(
+            lambda x: x[0], self.step(firm_id)
+        )
+        state_info = {
+            "price_matrix": self.market.price_matrix[0].cpu().numpy(),
+            "volume_matrix": self.market.volume_matrix[0].cpu().numpy(),
+            "finance": self.market.gains[0].cpu().numpy()
+            + np.array([firm.financial_resources[0].item() for firm in self.firms]),
+            "reserves": torch.stack([firm.reserves[0] for firm in self.firms])
+            .cpu()
+            .numpy(),
+        }
         if self.limit:
-            state_info['limits'] = torch.tensor([firm.limit[0] for firm in self.firms]).cpu().numpy()
-        percent_to_buy, percent_to_sale, percent_to_use, prices = torch.split(actions_concatenated.cpu(),
-                                                                              self.actions_split_sizes)
-        policy_info = {'percent_to_buy': percent_to_buy[:-1].unflatten(-1, self.market.price_matrix.shape[1:]).numpy(),
-                       'percent_to_sale': percent_to_sale.numpy(),
-                       'percent_to_use': percent_to_use.numpy(),
-                       'prices': prices.numpy()}
+            state_info["limits"] = (
+                torch.tensor([firm.limit[0] for firm in self.firms]).cpu().numpy()
+            )
+        percent_to_buy, percent_to_sale, percent_to_use, prices = torch.split(
+            actions_concatenated.cpu(), self.actions_split_sizes
+        )
+        policy_info = {
+            "percent_to_buy": percent_to_buy[:-1]
+            .unflatten(-1, self.market.price_matrix.shape[1:])
+            .numpy(),
+            "percent_to_sale": percent_to_sale.numpy(),
+            "percent_to_use": percent_to_use.numpy(),
+            "prices": prices.numpy(),
+        }
 
         self.state_history.append(state_info)
         self.actions_history[firm_id].append(policy_info)

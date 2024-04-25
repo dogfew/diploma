@@ -6,7 +6,9 @@ class BatchedLeontief:
     Leontief Production Function
     """
 
-    def __init__(self, input_tensor: torch.Tensor, output_tensor: torch.Tensor, device='cpu'):
+    def __init__(
+        self, input_tensor: torch.Tensor, output_tensor: torch.Tensor, device="cpu"
+    ):
         """
         :param input_tensor: [n_branches]
         :param output_tensor: [n_branches]
@@ -33,9 +35,11 @@ class BatchedLeontief:
             limit = torch.full((bs, 1), self.max_limit, device=self.device)
         minimum = torch.full((bs, 1), 0, device=self.device)
         produced = torch.min(
-                input_reserves[:, self.input_tensor != 0]
-                // self.input_tensor[self.input_tensor != 0], dim=1, keepdim=True
-            ).values
+            input_reserves[:, self.input_tensor != 0]
+            // self.input_tensor[self.input_tensor != 0],
+            dim=1,
+            keepdim=True,
+        ).values
         produced = torch.clamp(
             produced,
             min=minimum,

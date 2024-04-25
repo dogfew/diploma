@@ -10,10 +10,10 @@ class BatchedFirm:
     """
 
     def __init__(
-            self,
-            prod_function,
-            market,
-            batch_size=1,
+        self,
+        prod_function,
+        market,
+        batch_size=1,
     ):
         """
         :param prod_function: Производственная функция
@@ -25,8 +25,12 @@ class BatchedFirm:
         self.n_branches = self.market.n_branches
         self.reserves = torch.zeros(
             (self.batch_size, self.market.n_branches),
-            dtype=self.market.dtype, device=self.device)
-        self.financial_resources = torch.zeros((self.batch_size, 1), dtype=self.market.dtype, device=self.device)
+            dtype=self.market.dtype,
+            device=self.device,
+        )
+        self.financial_resources = torch.zeros(
+            (self.batch_size, 1), dtype=self.market.dtype, device=self.device
+        )
         self.id = market.generate_id() - 1
 
     @property
@@ -58,7 +62,9 @@ class BatchedFirm:
         """
         assert percent_to_buy.shape == self.market.volume_matrix.shape
         purchase_matrix = torch.min(
-            percent_to_buy * self.financial_resources.unsqueeze(-1) // self.market.price_matrix,
+            percent_to_buy
+            * self.financial_resources.unsqueeze(-1)
+            // self.market.price_matrix,
             self.market.volume_matrix,
         ).type(self.market.dtype)
         sellers_gains = (purchase_matrix * self.market.price_matrix).sum(dim=2)
@@ -100,11 +106,11 @@ class BatchedFirm:
         return revenue
 
     def step(
-            self,
-            percent_to_buy: torch.Tensor,
-            percent_to_sale: torch.Tensor,
-            percent_to_use: torch.Tensor,
-            prices: torch.Tensor = None,
+        self,
+        percent_to_buy: torch.Tensor,
+        percent_to_sale: torch.Tensor,
+        percent_to_use: torch.Tensor,
+        prices: torch.Tensor = None,
     ) -> tuple[float, float]:
         """
         :param percent_to_buy: [B, n_firms, n_branches]
@@ -143,24 +149,24 @@ class BatchedLimitFirm(BatchedFirm):
     """
 
     def __init__(
-            self,
-            prod_function,
-            invest_function,
-            market,
-            batch_size=1,
-            is_deprecating=True,
+        self,
+        prod_function,
+        invest_function,
+        market,
+        batch_size=1,
+        is_deprecating=True,
     ):
         super().__init__(
-            prod_function=prod_function,
-            market=market,
-            batch_size=batch_size
+            prod_function=prod_function, market=market, batch_size=batch_size
         )
         deprecation_steps = market.deprecation_steps
         self.invest_function = invest_function
         self.deprecation_steps = deprecation_steps  # How much time Fixed Capital exists
-        self.capital = torch.zeros((batch_size, deprecation_steps + 1),
-                                   device=self.device,
-                                   dtype=self.market.dtype)
+        self.capital = torch.zeros(
+            (batch_size, deprecation_steps + 1),
+            device=self.device,
+            dtype=self.market.dtype,
+        )
         self.current_step = 1
         self.capital[:, 0] = 1
         self.is_deprecating = is_deprecating
@@ -197,16 +203,18 @@ class BatchedLimitFirm(BatchedFirm):
         Какую долю резервов от каждого товара потратить для производство
         """
         input_reserves = torch.min(input_reserves, self.reserves)
-        used_reserves, new_reserves = self.prod_function(input_reserves, limit=self.limit)
+        used_reserves, new_reserves = self.prod_function(
+            input_reserves, limit=self.limit
+        )
         self.reserves -= used_reserves
         self.reserves += new_reserves
 
     def step(
-            self,
-            percent_to_buy: torch.Tensor,
-            percent_to_sale: torch.Tensor,
-            percent_to_use: torch.Tensor,
-            prices: torch.Tensor = None,
+        self,
+        percent_to_buy: torch.Tensor,
+        percent_to_sale: torch.Tensor,
+        percent_to_use: torch.Tensor,
+        prices: torch.Tensor = None,
     ) -> tuple[float, float]:
         """
         :param percent_to_buy: [n_firms, n_branches]
@@ -239,21 +247,26 @@ class BatchedLimitFirm(BatchedFirm):
         return representation
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from environment_batched.market import BatchedMarket
     from environment_batched.prod_functions import BatchedLeontief as Leontief
 
     batch_size = 64
     market = BatchedMarket(batch_size=batch_size)
-    firm = BatchedLimitFirm(market=market,
-                            batch_size=batch_size,
-                            prod_function=Leontief(torch.tensor([1, 0]), torch.tensor([0, 2])),
-                            invest_function=Leontief(torch.tensor([1, 0]), torch.tensor([0, 2]))
-                            )
-    firm2 = BatchedFirm(market=market,
-                        batch_size=batch_size,
-                        prod_function=Leontief(torch.tensor([1, 0]), torch.tensor([0, 2])))
-    firm3 = BatchedFirm(market=market,
-                        batch_size=batch_size,
-                        prod_function=Leontief(torch.tensor([1, 0]), torch.tensor([0, 2])))
+    firm = BatchedLimitFirm(
+        market=market,
+        batch_size=batch_size,
+        prod_function=Leontief(torch.tensor([1, 0]), torch.tensor([0, 2])),
+        invest_function=Leontief(torch.tensor([1, 0]), torch.tensor([0, 2])),
+    )
+    firm2 = BatchedFirm(
+        market=market,
+        batch_size=batch_size,
+        prod_function=Leontief(torch.tensor([1, 0]), torch.tensor([0, 2])),
+    )
+    firm3 = BatchedFirm(
+        market=market,
+        batch_size=batch_size,
+        prod_function=Leontief(torch.tensor([1, 0]), torch.tensor([0, 2])),
+    )
     print(firm.capital)

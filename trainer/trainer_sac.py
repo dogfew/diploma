@@ -20,27 +20,32 @@ class TrainerSAC(BaseTrainer):
     """
 
     def __init__(
-            self,
-            environment,
-            q_critic,
-            gamma=0.99,
-            tau=0.95,
-            entropy_reg=0.01,
-            learning_rates=(3e-4, 3e-4),
-            buffer_size=8192,
-            batch_size=32,
-            max_grad_norm=1,
-            device="cuda",
+        self,
+        environment,
+        q_critic,
+        gamma=0.99,
+        tau=0.95,
+        entropy_reg=0.01,
+        learning_rates=(3e-4, 3e-4),
+        buffer_size=8192,
+        batch_size=32,
+        max_grad_norm=1,
+        device="cuda",
     ):
         super().__init__(environment)
         critic_lr, actor_lr = learning_rates
 
         market = self.environment.market
-        state_dim, action_dim = self.environment.state_dim, get_action_dim(market, limit=environment.limit)
+        state_dim, action_dim = self.environment.state_dim, get_action_dim(
+            market, limit=environment.limit
+        )
         n_firms = market.n_firms
         # Replay Buffer
         self.buffer = ReplayBuffer(
-            state_dim=state_dim, action_dim=action_dim, n_firms=n_firms, size=buffer_size
+            state_dim=state_dim,
+            action_dim=action_dim,
+            n_firms=n_firms,
+            size=buffer_size,
         )
 
         # Critic that returns Q-value (1)
@@ -107,10 +112,11 @@ class TrainerSAC(BaseTrainer):
             if change_order:
                 random.shuffle(order)
             pbar.set_postfix(
-                {"LR": self.q_critic_scheduler.get_last_lr()[0],
-                 "Buffer Index": self.buffer.index,
-                 "Order": str(order)
-                 }
+                {
+                    "LR": self.q_critic_scheduler.get_last_lr()[0],
+                    "Buffer Index": self.buffer.index,
+                    "Order": str(order),
+                }
             )
 
     def train_epoch(self, max_episode_length=10, order: list[int] = None):
@@ -137,8 +143,8 @@ class TrainerSAC(BaseTrainer):
                         next_q_values1, next_q_values2
                     ) - self.entropy_reg * log_probs_next.mean(dim=-1)
                     q_values_target = (
-                            rewards.squeeze(-1)[:, firm_id]
-                            + self.gamma * next_v[:, firm_id]
+                        rewards.squeeze(-1)[:, firm_id]
+                        + self.gamma * next_v[:, firm_id]
                     )
                 # Compute Critic Loss (1)
                 q_values1 = self.q_critic(x, actions)[:, firm_id]
@@ -172,7 +178,7 @@ class TrainerSAC(BaseTrainer):
                 q_values2 = self.q_critic2(x, actions)[:, firm_id]
                 q_values = torch.minimum(q_values1, q_values2)
                 actor_loss = (
-                        log_probs_firm.sum(dim=1) * self.entropy_reg - q_values
+                    log_probs_firm.sum(dim=1) * self.entropy_reg - q_values
                 ).mean()
 
                 # Optimize for Actor[firm_id]
@@ -222,68 +228,58 @@ class TrainerSAC(BaseTrainer):
     @torch.no_grad()
     def _soft_update_target_network(self):
         for target_param, param in zip(
-                self.q_critic_target.parameters(),
-                self.q_critic.parameters(),
+            self.q_critic_target.parameters(),
+            self.q_critic.parameters(),
         ):
             target_param.data.copy_(
                 (1 - self.tau) * target_param.data + self.tau * param.data
             )
 
         for target_param, param in zip(
-                self.q_critic2_target.parameters(),
-                self.q_critic2.parameters(),
+            self.q_critic2_target.parameters(),
+            self.q_critic2.parameters(),
         ):
             target_param.data.copy_(
                 (1 - self.tau) * target_param.data + self.tau * param.data
             )
 
     @torch.no_grad()
-    def collect_experience(self, order, num_steps=50, do_not_skip=False):
+    def collect_experience(self, order, num_steps=50):
         if order is None:
             order = range(len(self.environment.firms))
+
         batch_size = self.environment.batch_size
         action_dim = self.environment.action_dim
         state_dim = self.environment.state_dim
         n_agents = self.environment.n_agents
 
-        rewards_lst = []
-        kwargs = dict(fill_value=torch.nan, device=self.device)
+        total_steps = num_steps + 1
+        kwargs = dict(device=self.device)
 
-        new_data = {
-            "states": torch.full((batch_size, n_agents, state_dim), **kwargs),
-            "actions": torch.full((batch_size, n_agents, action_dim), **kwargs),
-            'rewards': torch.full((batch_size, n_agents, 1), **kwargs),
-            "next_states": torch.full((batch_size, n_agents, state_dim), **kwargs),
-        }
-        # First Steps
+        states = torch.empty((total_steps, batch_size, n_agents, state_dim), **kwargs)
+        actions = torch.empty((total_steps, batch_size, n_agents, action_dim), **kwargs)
+        rewards = torch.empty((total_steps, batch_size, n_agents, 1), **kwargs)
         for firm_id in order:
             state, actions, log_probs, _, costs = self.environment.step(firm_id)
-            new_data['states'][:, firm_id, :] = state
-            new_data['actions'][:, firm_id, :] = actions
-            new_data['rewards'][:, firm_id, :] = - costs
-        # Other Steps. We do not record final step
-        for step in range(num_steps):
-            new_data, old_data = {
-                'rewards': torch.full((batch_size, n_agents, 1), **kwargs),
-                "next_states": torch.full((batch_size, n_agents, state_dim), **kwargs),
-                "actions": torch.full((batch_size, n_agents, action_dim), **kwargs),
-                "states": torch.full((batch_size, n_agents, state_dim), **kwargs),
-            }, new_data
+            states[0, :, firm_id, :] = state
+            actions[0, :, firm_id, :] = actions
+            rewards[0, :, firm_id, :] = -costs
+
+        for step in range(1, total_steps):
             for firm_id in order:
-                state, actions, log_probs, prev_revenue, costs = self.environment.step(firm_id)
+                state, actions, log_probs, revenue, costs = self.environment.step(
+                    firm_id
+                )
+                states[step, :, firm_id, :] = state
+                actions[step, :, firm_id, :] = actions
+                rewards[step, :, firm_id, :] = -costs
 
-                old_data['rewards'][:, firm_id, :] += prev_revenue
-                old_data['next_states'][:, firm_id, :] = state
+                rewards[step - 1, :, firm_id, :] += revenue
 
-                new_data['rewards'][:, firm_id, :] = - costs
-                new_data['states'][:, firm_id, :] = state
-                new_data['actions'][:, firm_id, :] = actions
-
-            self.buffer.add_batch(
-                x=old_data['states'],
-                x_next=old_data['next_states'],
-                actions=old_data['actions'],
-                rewards=old_data['rewards'] / self.environment.market.start_gains,
-            )
-            rewards_lst.append(old_data['rewards'].permute(1, 0, 2))
-        return rewards_lst
+        self.buffer.add_batch(
+            x=states[:-1].flatten(0, 1),
+            x_next=states[1:].flatten(0, 1),
+            actions=actions[:-1].flatten(0, 1),
+            rewards=rewards[:-1].flatten(0, 1) / self.environment.market.start_gains,
+        )
+        return rewards.permute(0, 2, 1, 3)
