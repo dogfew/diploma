@@ -29,6 +29,7 @@ class TrainerSAC(BaseTrainer):
         learning_rates=(6e-4, 6e-4),
         buffer_size=8192,
         batch_size=32,
+        lr_gamma=0.98,
         max_grad_norm=1,
         device="cuda",
     ):
@@ -69,7 +70,7 @@ class TrainerSAC(BaseTrainer):
             self.q_critic2.parameters(), lr=critic_lr, weight_decay=1e-6
         )
         self.q_critic2_scheduler = torch.optim.lr_scheduler.ExponentialLR(
-            self.q_critic2_optimizer, 0.995
+            self.q_critic2_optimizer, gamma=lr_gamma
         )
 
         self.policies = self.environment.policies
@@ -82,7 +83,7 @@ class TrainerSAC(BaseTrainer):
             for policy in self.policies
         ]
         self.actor_schedulers = [
-            torch.optim.lr_scheduler.ExponentialLR(actor_optimizer, gamma=0.995)
+            torch.optim.lr_scheduler.ExponentialLR(actor_optimizer, gamma=lr_gamma)
             for actor_optimizer in self.actor_optimizers
         ]
 
