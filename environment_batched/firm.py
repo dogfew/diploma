@@ -165,6 +165,10 @@ class BatchedLimitFirm(BatchedFirm):
         self.capital[:, 0] = 1
         self.is_deprecating = is_deprecating
 
+    def change_batch_size(self, batch_size):
+        super().change_batch_size(batch_size)
+        self.capital = self.capital[:1].repeat(batch_size, 1)
+
     def reset(self):
         super().reset()
         self.capital.fill_(0)

@@ -9,7 +9,7 @@ from utils.plotting import plot_actions, plot_environment
 torch.manual_seed(123)
 torch.backends.cudnn.deterministic = True
 device = 'cuda'
-market_kwargs = dict(start_volumes=10, base_price=100, start_gains=100, deprecation_steps=3)
+market_kwargs = dict(start_volumes=10, base_price=100, start_gains=100, deprecation_steps=2)
 prod_functions = [
     BatchedLeontief(torch.tensor([1, 0]), torch.tensor([0, 2]), device=device),
     BatchedLeontief(torch.tensor([0, 1]), torch.tensor([2, 0]), device=device),
