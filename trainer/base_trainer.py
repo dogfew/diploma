@@ -8,7 +8,7 @@ from itertools import chain
 from IPython.display import clear_output
 from copy import deepcopy, copy
 
-from trainer.utils.replay_buffer import ReplayBuffer, ReplayBufferOld
+from trainer.replay_buffer import ReplayBuffer, ReplayBufferOld
 
 
 def in_notebook():

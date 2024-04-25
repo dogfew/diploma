@@ -6,7 +6,7 @@ import pandas as pd
 from copy import deepcopy
 
 from trainer.base_trainer import BaseTrainer
-from trainer.utils.replay_buffer import ReplayBuffer
+from trainer.replay_buffer import ReplayBuffer
 from models.utils.preprocessing import get_state_dim, get_action_dim
 
 
