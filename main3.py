@@ -22,7 +22,7 @@ env = BatchedEnvironment(market_kwargs,
                          BetaPolicyNetwork2,
                          prod_functions,
                          invest_functions=invest_functions,
-                         batch_size=512)
+                         batch_size=128)
 critic = CentralizedCritic2
 trainer = TrainerSAC(env, q_critic=critic, batch_size=512)
 # trainer.train_epoch()
