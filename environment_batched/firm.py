@@ -1,6 +1,8 @@
 import torch
 from copy import deepcopy
 
+from environment_batched.utils import price_change_function
+
 
 class BatchedFirm:
     """
@@ -84,8 +86,13 @@ class BatchedFirm:
         """
         if prices is None:
             return
-        new_prices = (prices * self.market.max_price).type(self.market.dtype)
-        self.market.process_prices(self.id, new_prices)
+            # new_prices = (prices * self.market.max_price).type(self.market.dtype)
+            # self.market.process_prices(self.id, new_prices)
+        new_prices = price_change_function(
+            self.market.price_matrix[:, self.id], prices
+        ).type(self.market.dtype)
+        self.market.process_prices(self.id, new_prices=new_prices)
+        return new_prices
 
     def receive_revenue(self):
         revenue = self.market.process_gains(self.id)[:, None]
@@ -151,44 +158,40 @@ class BatchedLimitFirm(BatchedFirm):
         deprecation_steps = market.deprecation_steps
         self.invest_function = invest_function
         self.deprecation_steps = deprecation_steps  # How much time Fixed Capital exists
-        self.capital = [torch.tensor([deprecation_steps], device=self.device) for _ in range(self.batch_size)]
+        self.capital = torch.zeros((batch_size, deprecation_steps + 1),
+                                   device=self.device,
+                                   dtype=self.market.dtype)
+        self.current_step = 1
+        self.capital[:, 0] = 1
         self.is_deprecating = is_deprecating
 
     def reset(self):
         super().reset()
-        self.capital = [torch.tensor([self.deprecation_steps]) for _ in range(self.batch_size)]
+        self.capital.fill_(0)
+        self.capital[:, 0] = 1
+        self.current_step = 1
 
     @property
     def limit(self):
-        return torch.tensor([x.size(0) for x in self.capital], device=self.device).unsqueeze(1)
+        return self.capital.sum(dim=1, keepdim=True)
 
-    def deprecation(self):
-        if self.is_deprecating:
-            self.capital = [x[x >= 1] - 1 for x in self.capital]
-
-    def invest(self, percent_to_use: torch.Tensor):
+    def invest(self, input_reserves: torch.Tensor):
         """
-        :param percent_to_use: (n_branches)
+        :param input_reserves: (n_branches)
         Какую долю резервов от каждого товара потратить на инвестициии
         """
-        assert torch.all((0 <= percent_to_use) & (percent_to_use <= 1))
-        input_reserves = (self.reserves * percent_to_use).round().type(torch.int64)
         input_reserves = torch.min(input_reserves, self.reserves)
         used_reserves, new_limits = self.invest_function(input_reserves)
         self.reserves -= used_reserves
-        for i, new_limit in enumerate(new_limits):
-            if new_limit > 0:
-                self.capital[i] = torch.hstack(
-                    [self.capital[i], torch.full((new_limit, ), self.deprecation_steps)]
-                )
+        self.capital[:, self.current_step] = new_limits.flatten()
+        self.current_step += 1
+        self.current_step %= self.deprecation_steps + 1
 
-    def produce(self, percent_to_use: torch.Tensor):
+    def produce(self, input_reserves: torch.Tensor):
         """
-        :param percent_to_use: (n_branches)
+        :param input_reserves: (n_branches)
         Какую долю резервов от каждого товара потратить для производство
         """
-        assert torch.all((0 <= percent_to_use) & (percent_to_use <= 1))
-        input_reserves = (self.reserves * percent_to_use).round().type(torch.int64)
         input_reserves = torch.min(input_reserves, self.reserves)
         used_reserves, new_reserves = self.prod_function(input_reserves, limit=self.limit)
         self.reserves -= used_reserves
@@ -211,13 +214,14 @@ class BatchedLimitFirm(BatchedFirm):
         percent_to_use_prod, percent_to_use_invest = torch.split(
             percent_to_use, [self.n_branches, self.n_branches], dim=1
         )
+        input_prod = (self.reserves * percent_to_use_prod).round().type(torch.int64)
+        input_invest = (self.reserves * percent_to_use_invest).round().type(torch.int64)
         revenue = self.receive_revenue()
         costs = self.buy(percent_to_buy)
-        self.invest(percent_to_use_invest)
-        self.produce(percent_to_use_prod)
+        self.invest(input_invest)
+        self.produce(input_prod)
         self.define_prices(prices)
         self.sell(percent_to_sale)
-        self.deprecation()
         return revenue, costs
 
     def __repr__(self):

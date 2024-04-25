@@ -34,10 +34,12 @@ class BetaPolicyNetwork(nn.Module):
             nn.Softplus(),
             nn.Unflatten(-1, (n_branches, 2)),
         )
+
         self.use = nn.Sequential(
-            nn.Linear(hidden_dim, 2 * (n_branches if not limit else 2 * n_branches)),
+            nn.Linear(hidden_dim, 2 * n_branches if not limit else 3 * n_branches),
             nn.Softplus(),
-            nn.Unflatten(-1, (n_branches + n_branches * limit, 2)),
+            nn.Hardtanh(min_val=self.eps, max_val=1e8),  # to prevent nans
+            nn.Unflatten(-1, (n_branches, 2 + limit)),
         )
         self.prices = nn.Sequential(
             nn.Linear(hidden_dim, 2 * n_branches),
@@ -67,7 +69,7 @@ class BetaPolicyNetwork(nn.Module):
         prices_params = self.prices(x)
         buy_distr = Dirichlet(buy_params)
         sale_distr = Beta(sale_params[..., 0], sale_params[..., 1])
-        use_distr = Beta(use_params[..., 0], use_params[..., 1])
+        use_distr = Dirichlet(use_params)
         price_distr = Beta(prices_params[..., 0], prices_params[..., 1])
 
         percent_to_buy = buy_distr.rsample()
@@ -75,21 +77,22 @@ class BetaPolicyNetwork(nn.Module):
         percent_to_use = use_distr.rsample()
         percent_price_change = price_distr.rsample()
 
+        buy_log_prob = buy_distr.log_prob(percent_to_buy)
+        use_log_prob = use_distr.log_prob(percent_to_use)
+        if buy_log_prob.dim() == 0:
+            percent_to_use = percent_to_use[:, :-1].flatten()
+        else:
+            percent_to_use = percent_to_use[:, :, :-1].flatten(1)
         actions = (
             percent_to_buy,
             percent_to_sale,
             percent_to_use,
             percent_price_change,
         )
-        buy_log_prob = buy_distr.log_prob(percent_to_buy)
-        if buy_log_prob.dim() == 0:
-            buy_log_prob = buy_log_prob.expand(percent_to_buy.shape[-1])
-        else:
-            buy_log_prob = buy_log_prob.unsqueeze(-1).expand(-1, percent_to_buy.shape[-1])
         log_probs = (
-            buy_log_prob,
+            buy_log_prob.unsqueeze(-1),
             sale_distr.log_prob(percent_to_sale),
-            use_distr.log_prob(percent_to_use),
+            use_log_prob,
             price_distr.log_prob(percent_price_change),
         )
         return actions, log_probs

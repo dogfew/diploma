@@ -6,7 +6,7 @@ import pandas as pd
 from copy import deepcopy
 
 from trainer.base_trainer import BaseTrainer
-from trainer import ReplayBuffer
+from trainer.replay_buffer import ReplayBuffer
 from models.utils.preprocessing import get_state_dim, get_action_dim
 
 
@@ -104,6 +104,7 @@ class TrainerSAC(BaseTrainer):
     def train_epoch(self, max_episode_length=10, order: list[int] = None):
         self.environment.reset()
         history = []
+
         for _ in range(max_episode_length):
             rewards_debug = self.collect_experience(order)
             for firm_id in range(self.n_agents):
@@ -159,7 +160,7 @@ class TrainerSAC(BaseTrainer):
                 q_values2 = self.q_critic2(x, actions)[:, firm_id]
                 q_values = torch.minimum(q_values1, q_values2)
                 actor_loss = (
-                    log_probs_firm * self.entropy_reg - q_values.unsqueeze(1)
+                    log_probs_firm.sum(dim=1) * self.entropy_reg - q_values
                 ).mean()
 
                 # Optimize for Actor[firm_id]

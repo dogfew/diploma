@@ -24,11 +24,18 @@ env = BatchedEnvironment(market_kwargs,
                          invest_functions=invest_functions,
                          batch_size=3)
 env.reset()
-invest_tensor = torch.tensor([[1, 1], [0.5, 1], [1, 0.3]], device='cuda')
-env.firms[0].invest(invest_tensor)
-env.firms[0].deprecation()
-env.firms[0].invest(invest_tensor)
-right_answer = [tensor([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-                tensor([0, 0, 0, 0, 0, 0, 1, 1]),
-                tensor([0, 0, 0, 0, 1, 1])]
-print([torch.all(x == y).item() for x, y in zip(env.firms[0].capital, right_answer)])
+invest_tensor = env.firms[0].reserves * torch.tensor([[1, 1], [0.5, 1], [1, 0.3]], device='cuda')
+env.firms[0].invest(invest_tensor.round().type(torch.int64))
+env.firms[0].invest(invest_tensor.round().type(torch.int64))
+env.firms[0].invest(invest_tensor.round().type(torch.int64))
+env.firms[0].invest(invest_tensor.round().type(torch.int64))
+env.firms[0].invest(invest_tensor.round().type(torch.int64))
+env.firms[0].invest(invest_tensor.round().type(torch.int64))
+
+# env.firms[0].invest(invest_tensor.round().type(torch.int64))
+# env.firms[0].deprecation() # 0, 5, 3
+print(env.firms[0].capital, env.firms[0].limit)
+# right_answer = [tensor([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+#                 tensor([0, 0, 0, 0, 0, 0, 1, 1]),
+#                 tensor([0, 0, 0, 0, 1, 1])]
+# print([torch.all(x == y).item() for x, y in zip(env.firms[0].capital, right_answer)])

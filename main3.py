@@ -25,13 +25,14 @@ env = BatchedEnvironment(market_kwargs,
                          batch_size=512)
 critic = CentralizedCritic2
 trainer = TrainerSAC(env, q_critic=critic, batch_size=512)
-trainer.train(1000, episode_length=50)
-
-env.change_batch_size(1)
-env.reset()
-n_periods = 100
-for i in range(n_periods):
-    env.step_and_record(i % env.market.n_firms)
-plot_environment(env.state_history)
-plot_actions(env.actions_history[0], 'Политика Фирма 1 (1)')
-plot_actions(env.actions_history[1], 'Политика Фирма 2 (2)')
+trainer.train_epoch()
+trainer.train(1000, episode_length=30)
+#
+# env.change_batch_size(1)
+# env.reset()
+# n_periods = 100
+# for i in range(n_periods):
+#     env.step_and_record(i % env.market.n_firms)
+# plot_environment(env.state_history)
+# plot_actions(env.actions_history[0], 'Политика Фирма 1 (1)')
+# plot_actions(env.actions_history[1], 'Политика Фирма 2 (2)')

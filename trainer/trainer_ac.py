@@ -17,7 +17,7 @@ class TrainerAC(BaseTrainer):
             q_critic,
             gamma=0.99,
             tau=0.95,
-            learning_rates=(3e-4, 1e-4),
+            learning_rates=(3e-4, 3e-4),
             batch_size=32,
             max_grad_norm=1,
             device="cuda",
@@ -152,7 +152,7 @@ class TrainerAC(BaseTrainer):
                         {
                             "actor_loss": actor_loss.item(),
                             "critic_loss": critic_loss.item(),
-                            "reward": rewards_debug[firm_id].sum().item(),
+                            "reward": rewards_debug[firm_id].mean().item(),
                             "firm_id": firm_id,
                         }
                     )
