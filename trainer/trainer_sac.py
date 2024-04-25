@@ -22,7 +22,7 @@ class TrainerSAC(BaseTrainer):
         gamma=0.99,
         tau=0.95,
         entropy_reg=0.01,
-        learning_rates=(6e-4, 6e-4),
+        learning_rates=(3e-4, 3e-4),
         batch_size=32,
         max_grad_norm=1,
         device="cuda",
