@@ -99,8 +99,15 @@ class TrainerSAC(BaseTrainer):
         self.batch_size = batch_size
         self.device = device
 
-    def train(self, n_episodes, episode_length=100, debug_period=5, change_order=False):
-        pbar = tqdm(range(n_episodes))
+    def train(self, n_epochs, episode_length=100, debug_period=5, shuffle_order=False):
+        """
+        :param n_epochs: Number of Epochs to train model
+        :param episode_length: Number of environment full steps per epoch
+        :param debug_period: how often to update plot
+        :param shuffle_order: whether to shuffle agent's order
+        :return:
+        """
+        pbar = tqdm(range(n_epochs))
         order = list(range(self.n_agents))
         for _ in pbar:
             df = self.train_epoch(max_episode_length=episode_length, order=order)
@@ -109,7 +116,7 @@ class TrainerSAC(BaseTrainer):
             if self.episode % debug_period == 0:
                 self.plot_loss(self.df_list)
             self.episode += 1
-            if change_order:
+            if shuffle_order:
                 random.shuffle(order)
             pbar.set_postfix(
                 {
@@ -256,30 +263,30 @@ class TrainerSAC(BaseTrainer):
         total_steps = num_steps + 1
         kwargs = dict(device=self.device)
 
-        states = torch.empty((total_steps, batch_size, n_agents, state_dim), **kwargs)
-        actions = torch.empty((total_steps, batch_size, n_agents, action_dim), **kwargs)
-        rewards = torch.empty((total_steps, batch_size, n_agents, 1), **kwargs)
+        all_states = torch.empty((total_steps, batch_size, n_agents, state_dim), **kwargs)
+        all_actions = torch.empty((total_steps, batch_size, n_agents, action_dim), **kwargs)
+        all_rewards = torch.empty((total_steps, batch_size, n_agents, 1), **kwargs)
         for firm_id in order:
             state, actions, log_probs, _, costs = self.environment.step(firm_id)
-            states[0, :, firm_id, :] = state
-            actions[0, :, firm_id, :] = actions
-            rewards[0, :, firm_id, :] = -costs
+            all_states[0, :, firm_id, :] = state
+            all_actions[0, :, firm_id, :] = actions
+            all_rewards[0, :, firm_id, :] = -costs
 
         for step in range(1, total_steps):
             for firm_id in order:
                 state, actions, log_probs, revenue, costs = self.environment.step(
                     firm_id
                 )
-                states[step, :, firm_id, :] = state
-                actions[step, :, firm_id, :] = actions
-                rewards[step, :, firm_id, :] = -costs
+                all_states[step, :, firm_id, :] = state
+                all_actions[step, :, firm_id, :] = actions
+                all_rewards[step, :, firm_id, :] = -costs
 
-                rewards[step - 1, :, firm_id, :] += revenue
+                all_rewards[step - 1, :, firm_id, :] += revenue
 
         self.buffer.add_batch(
-            x=states[:-1].flatten(0, 1),
-            x_next=states[1:].flatten(0, 1),
-            actions=actions[:-1].flatten(0, 1),
-            rewards=rewards[:-1].flatten(0, 1) / self.environment.market.start_gains,
+            x=all_states[:-1].flatten(0, 1),
+            x_next=all_states[1:].flatten(0, 1),
+            actions=all_actions[:-1].flatten(0, 1),
+            rewards=all_rewards[:-1].flatten(0, 1) / self.environment.market.start_gains,
         )
-        return rewards.permute(0, 2, 1, 3)
+        return all_rewards.permute(0, 2, 1, 3)

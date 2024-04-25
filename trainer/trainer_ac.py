@@ -145,9 +145,6 @@ class TrainerAC(BaseTrainer):
                 self.actor_optimizers[firm_id].step()
 
                 with torch.no_grad():
-                    # revenues = torch.tensor(self.environment.revenues[firm_id])
-                    # costs = torch.tensor(self.environment.costs[firm_id])
-                    # reward = (revenues - costs).sum() + self.environment.market.gains[firm_id]
                     history.append(
                         {
                             "actor_loss": actor_loss.item(),
