@@ -266,12 +266,15 @@ class TrainerSAC(BaseTrainer):
         all_states = torch.empty((total_steps, batch_size, n_agents, state_dim), **kwargs)
         all_actions = torch.empty((total_steps, batch_size, n_agents, action_dim), **kwargs)
         all_rewards = torch.empty((total_steps, batch_size, n_agents, 1), **kwargs)
+
+        # First Step
         for firm_id in order:
             state, actions, log_probs, _, costs = self.environment.step(firm_id)
             all_states[0, :, firm_id, :] = state
             all_actions[0, :, firm_id, :] = actions
             all_rewards[0, :, firm_id, :] = -costs
 
+        # Other steps
         for step in range(1, total_steps):
             for firm_id in order:
                 state, actions, log_probs, revenue, costs = self.environment.step(
@@ -289,4 +292,4 @@ class TrainerSAC(BaseTrainer):
             actions=all_actions[:-1].flatten(0, 1),
             rewards=all_rewards[:-1].flatten(0, 1) / self.environment.market.start_gains,
         )
-        return all_rewards.permute(0, 2, 1, 3)
+        return all_rewards.permute(0, 2, 1, 3) * self.environment.market.start_gains

@@ -93,7 +93,7 @@ def plot_environment(env_history):
     plt.subplots_adjust(right=0.98)
     plt.show()
     ncols = 1 + ('limits' in data[0].keys())
-    fig, ax = plt.subplots(1, ncols, figsize=(6  * ncols, 5))
+    fig, ax = plt.subplots(1, ncols, figsize=(6 * ncols, 5))
     ax = np.atleast_1d(ax)
 
     for i in range(finances.shape[0]):
