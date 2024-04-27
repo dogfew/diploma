@@ -30,6 +30,7 @@ class TrainerSAC(BaseTrainer):
         buffer_size=8192,
         batch_size=32,
         lr_gamma=0.98,
+        entropy_gamma=0.99,
         max_grad_norm=1,
         device="cuda",
     ):
@@ -97,6 +98,7 @@ class TrainerSAC(BaseTrainer):
         self.tau = tau
         self.max_grad_norm = max_grad_norm
         self.entropy_reg = entropy_reg
+        self.entropy_gamma = entropy_gamma
         self.batch_size = batch_size
         self.device = device
 
@@ -210,6 +212,7 @@ class TrainerSAC(BaseTrainer):
         for actor_scheduler in self.actor_schedulers:
             actor_scheduler.step()
         self.q_critic_scheduler.step()
+        self.entropy_reg *= self.entropy_gamma
         return pd.DataFrame(history).groupby("firm_id").mean()
 
     @torch.no_grad()
