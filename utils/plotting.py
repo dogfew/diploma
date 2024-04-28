@@ -46,6 +46,17 @@ def plot_actions(agent_actions_history, title=''):
     plt.show()
 
 
+def plot_volumes(env_history):
+    volumes = np.stack([x['volume_matrix'] for x in env_history]).T
+    reserves = np.stack([x['reserves'] for x in env_history]).T
+    total = (volumes + reserves).sum(axis=1).T
+    plt.plot(total)
+    plt.xlabel('Время')
+    plt.ylabel('Общий объём')
+    plt.title('Объём')
+    plt.legend([f'Товар_{i}' for i in range(total.shape[1])])
+    plt.show()
+
 def plot_environment(env_history):
     data = env_history
     num_firms, n_branches = data[0]['price_matrix'].shape

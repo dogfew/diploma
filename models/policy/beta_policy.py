@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.distributions import Beta, Dirichlet
+from torch.nn.utils import spectral_norm
 
 
 class BetaPolicyNetwork(nn.Module):
@@ -9,7 +10,7 @@ class BetaPolicyNetwork(nn.Module):
         state_dim,
         n_branches,
         n_firms,
-        hidden_dim=32,
+        hidden_dim=64,
         limit=False,
         eps=1e-8,
         min_log_prob=-10,
@@ -18,35 +19,50 @@ class BetaPolicyNetwork(nn.Module):
         self.eps = eps
         self.min_log_prob = min_log_prob
         self.net = nn.Sequential(
-            nn.Linear(state_dim, hidden_dim),
+            spectral_norm(nn.Linear(state_dim, hidden_dim)),
             nn.Tanh(),  # Limiting max value to avoid overflow.
-            nn.Linear(hidden_dim, hidden_dim),
+            spectral_norm(nn.Linear(hidden_dim, hidden_dim)),
             nn.Tanh(),  # Limiting max value to avoid overflow.
         )
 
         self.buy = nn.Sequential(
-            nn.Linear(hidden_dim, n_firms * n_branches + 1),
+            spectral_norm(nn.Linear(hidden_dim, n_firms * n_branches + 1)),
             nn.Softplus(),
-            nn.Hardtanh(min_val=self.eps, max_val=1e8),  # to prevent nans
+            # nn.Hardtanh(min_val=self.eps, max_val=1e8),  # to prevent nans
         )
         self.sale = nn.Sequential(
-            nn.Linear(hidden_dim, 2 * n_branches),
+            spectral_norm(nn.Linear(hidden_dim, 2 * n_branches)),
             nn.Softplus(),
             nn.Unflatten(-1, (n_branches, 2)),
         )
 
         self.use = nn.Sequential(
-            nn.Linear(hidden_dim, 2 * n_branches if not limit else 3 * n_branches),
+            spectral_norm(nn.Linear(hidden_dim, 2 * n_branches if not limit else 3 * n_branches)),
             nn.Softplus(),
-            nn.Hardtanh(min_val=self.eps, max_val=1e8),  # to prevent nans
+            # nn.Hardtanh(min_val=self.eps, max_val=1e8),  # to prevent nans
             nn.Unflatten(-1, (n_branches, 2 + limit)),
         )
         self.prices = nn.Sequential(
-            nn.Linear(hidden_dim, 2 * n_branches),
+            spectral_norm(nn.Linear(hidden_dim, 2 * n_branches)),
             nn.Softplus(),
             nn.Unflatten(-1, (n_branches, 2)),
         )
+        self.init_weights()
 
+    def init_weights(self):
+        """
+        According to paper: https://arxiv.org/pdf/2006.05990
+        :return:
+        """
+        # for module in [self.buy, self.sale, self.use, self.prices]:
+        #     for layer in module:
+        #         if isinstance(layer, nn.Linear):
+        #             nn.init.orthogonal_(layer.weight, 1.41)
+        for module in [self.buy, self.sale, self.use, self.prices]:
+            for layer in module:
+                if isinstance(layer, nn.Linear):
+                    nn.init.xavier_uniform_(layer.weight)
+                    layer.weight.data /= 100
     @property
     def device(self):
         return next(self.parameters()).device
@@ -104,16 +120,16 @@ class BetaPolicyNetwork2(BetaPolicyNetwork):
     ):
         super().__init__(state_dim, n_branches, n_firms, hidden_dim, limit, eps)
         self.net = nn.Sequential(
-            nn.Linear(state_dim, state_dim),
+            spectral_norm(nn.Linear(state_dim, state_dim)),
             nn.Tanh(),  # Limiting max value to avoid overflow.
-            nn.Linear(state_dim, state_dim),
+            spectral_norm(nn.Linear(state_dim, state_dim)),
             nn.Tanh(),  # Limiting max value to avoid overflow.
         )
 
         self.net2 = nn.Sequential(
-            nn.Linear(state_dim * 2, hidden_dim),
+            spectral_norm(nn.Linear(state_dim * 2, hidden_dim)),
             nn.Tanh(),  # Limiting max value to avoid overflow.
-            nn.Linear(hidden_dim, hidden_dim),
+            spectral_norm(nn.Linear(hidden_dim, hidden_dim)),
             nn.Tanh(),  # Limiting max value to avoid overflow.
         )
 

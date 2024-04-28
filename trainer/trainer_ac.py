@@ -103,6 +103,7 @@ class TrainerAC(BaseTrainer):
                 x, x_next, actions, rewards = map(
                     lambda i: i.to(self.device), self.buffer.sample(self.batch_size)
                 )
+                rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-6)
                 target_policies = self.target_policies
                 policies = self.policies
 

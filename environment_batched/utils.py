@@ -85,10 +85,5 @@ def price_change_function(current_prices, change):
         f(1.0) = 2.0
     """
     x = change
-    # f(x) * f(1-x) = 1
     a, b, c, d = 0.33895517, 0.49136315, 0.66971742, 0.499952
     return (current_prices * (a * x**3 + b * x**2 + c * x + d)).round()
-    # return current_prices * 1.97 / (torch.exp(-3.98 * (change - 0.5)) + 1) + 0.26
-    # return current_prices * torch.where(change <= 0.5, change + 0.5, change * 2)
-
-

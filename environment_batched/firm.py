@@ -14,9 +14,13 @@ class BatchedFirm:
             prod_function,
             market,
             batch_size=1,
+            production_reg=0.1,
     ):
         """
         :param prod_function: Производственная функция
+        :param market: Собственно, рынок
+        :param batch_size:
+        :param production_reg: Коэффициент регуляризации для производства
         :attribute reserves: Объём запасов фирмы
         """
         self.batch_size = batch_size
@@ -32,6 +36,7 @@ class BatchedFirm:
             (self.batch_size, 1), dtype=self.market.dtype, device=self.device
         )
         self.id = market.generate_id() - 1
+        self.production_reg = production_reg
 
     @property
     def device(self):
@@ -85,6 +90,7 @@ class BatchedFirm:
         used_reserves, new_reserves = self.prod_function(input_reserves)
         self.reserves -= used_reserves
         self.reserves += new_reserves
+        return used_reserves, new_reserves
 
     def define_prices(self, prices):
         """
@@ -92,8 +98,9 @@ class BatchedFirm:
         """
         if prices is None:
             return
-            # new_prices = (prices * self.market.max_price).type(self.market.dtype)
-            # self.market.process_prices(self.id, new_prices)
+        new_prices = (prices * self.market.max_price).type(self.market.dtype)
+        self.market.process_prices(self.id, new_prices)
+        return
         new_prices = price_change_function(
             self.market.price_matrix[:, self.id], prices
         ).type(self.market.dtype)
@@ -122,9 +129,13 @@ class BatchedFirm:
 
         revenue = self.receive_revenue()
         costs = self.buy(percent_to_buy)
-        self.produce(percent_to_use)
+        _, produced = self.produce(percent_to_use)
         self.define_prices(prices)
         self.sell(percent_to_sale)
+        if self.production_reg > 0:
+            revenue = revenue.type(torch.float64)
+            costs = costs.type(torch.float64)
+            revenue += (produced.sum(dim=1, keepdims=True) + 0.5).log() * self.production_reg
         return revenue, costs
 
     def __repr__(self):
@@ -155,10 +166,14 @@ class BatchedLimitFirm(BatchedFirm):
             market,
             batch_size=1,
             start_capital=2,
+            production_reg=0.1,
             is_deprecating=True,
     ):
         super().__init__(
-            prod_function=prod_function, market=market, batch_size=batch_size
+            prod_function=prod_function,
+            market=market,
+            batch_size=batch_size,
+            production_reg=production_reg
         )
         deprecation_steps = market.deprecation_steps
         self.invest_function = invest_function
@@ -171,6 +186,7 @@ class BatchedLimitFirm(BatchedFirm):
         self.start_capital = start_capital
         self.current_step = 1
         self.capital[:, 0] = start_capital
+        self.production_regularization = production_reg
         self.is_deprecating = is_deprecating
 
     def change_batch_size(self, batch_size):
@@ -234,10 +250,15 @@ class BatchedLimitFirm(BatchedFirm):
         input_invest = (self.reserves * percent_to_use_invest).round().type(torch.int64)
         revenue = self.receive_revenue()
         costs = self.buy(percent_to_buy)
-        self.invest(input_invest)
-        self.produce(input_prod)
+        _, new_limits = self.invest(input_invest)
+        _, produced = self.produce(input_prod)
         self.define_prices(prices)
         self.sell(percent_to_sale)
+
+        if self.production_reg > 0:
+            revenue = revenue.type(torch.float64)
+            costs = costs.type(torch.float64)
+            revenue += (produced.sum(dim=1, keepdims=True) + 0.5).log() * self.production_reg
         return revenue, costs
 
     def __repr__(self):
@@ -283,6 +304,37 @@ class BatchedLimitProductionFirm(BatchedLimitFirm):
         self.sell(percent_to_sale)
         revenue = new_reserves.sum(dim=1, keepdims=True)
         revenue -= - used_reserves_invest.sum(dim=1, keepdims=True)
+        revenue -= used_reserves_produce.sum(dim=1, keepdims=True)
+        costs = torch.zeros_like(revenue)
+        return revenue.log1p(), costs
+
+
+class BatchedProductionFirm(BatchedFirm):
+    """
+    It's the same firm, however only cares about production volumes.
+    """
+
+    def step(
+            self,
+            percent_to_buy: torch.Tensor,
+            percent_to_sale: torch.Tensor,
+            percent_to_use: torch.Tensor,
+            prices: torch.Tensor = None,
+    ) -> tuple[float, float]:
+        """
+        :param percent_to_buy: [n_firms, n_branches]
+        :param percent_to_sale: [n_branches]
+        :param percent_to_use: [2 * n_branches]
+        :param prices: [n_branches]
+        :return: revenue, costs
+        """
+        input_prod = (self.reserves * percent_to_use).round().type(torch.int64)
+        self.receive_revenue()
+        self.buy(percent_to_buy)
+        used_reserves_produce, new_reserves = self.produce(input_prod)
+        self.define_prices(prices)
+        self.sell(percent_to_sale)
+        revenue = new_reserves.sum(dim=1, keepdims=True)
         revenue -= used_reserves_produce.sum(dim=1, keepdims=True)
         costs = torch.zeros_like(revenue)
         return revenue.log1p(), costs

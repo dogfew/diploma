@@ -25,12 +25,13 @@ class TrainerSAC(BaseTrainer):
         q_critic,
         gamma=0.99,
         tau=0.95,
-        entropy_reg=0.01,
-        learning_rates=(6e-4, 6e-4),
+        entropy_reg=0.05,
+        learning_rates=(3e-4, 3e-4),
+        critic_hidden_dim=64,
         buffer_size=8192,
         batch_size=32,
         lr_gamma=0.98,
-        entropy_gamma=0.99,
+        entropy_gamma=0.999,
         max_grad_norm=1,
         device="cuda",
     ):
@@ -53,11 +54,14 @@ class TrainerSAC(BaseTrainer):
         # Critic that returns Q-value (1)
         self.critic_loss = nn.MSELoss()
         self.q_critic = q_critic(
-            state_dim=state_dim, action_dim=action_dim, n_agents=n_firms
+            state_dim=state_dim,
+            action_dim=action_dim,
+            n_agents=n_firms,
+            hidden_dim=critic_hidden_dim
         ).to(device)
         self.q_critic_target = deepcopy(self.q_critic)
         self.q_critic_optimizer = torch.optim.Adam(
-            self.q_critic.parameters(), lr=critic_lr, weight_decay=1e-6
+            self.q_critic.parameters(), lr=critic_lr, weight_decay=0
         )
         self.q_critic_scheduler = torch.optim.lr_scheduler.ExponentialLR(
             self.q_critic_optimizer, 0.995
@@ -68,7 +72,7 @@ class TrainerSAC(BaseTrainer):
         ).to(device)
         self.q_critic2_target = deepcopy(self.q_critic2)
         self.q_critic2_optimizer = torch.optim.Adam(
-            self.q_critic2.parameters(), lr=critic_lr, weight_decay=1e-6
+            self.q_critic2.parameters(), lr=critic_lr, weight_decay=0
         )
         self.q_critic2_scheduler = torch.optim.lr_scheduler.ExponentialLR(
             self.q_critic2_optimizer, gamma=lr_gamma
@@ -80,7 +84,7 @@ class TrainerSAC(BaseTrainer):
 
         # Actors
         self.actor_optimizers = [
-            torch.optim.Adam(policy.parameters(), lr=actor_lr, weight_decay=1e-6)
+            torch.optim.Adam(policy.parameters(), lr=actor_lr, weight_decay=0)
             for policy in self.policies
         ]
         self.actor_schedulers = [
@@ -142,6 +146,9 @@ class TrainerSAC(BaseTrainer):
                 )
                 policies = self.policies
 
+                # # Normalize rewards
+                # rewards = (rewards - rewards.mean(dim=0, keepdims=True)) / (rewards.std(dim=0, keepdims=True) + 1e-6)
+
                 # Compute Critic Target
                 with torch.no_grad():
                     actions_next, log_probs_next = self.get_actions(
@@ -188,7 +195,7 @@ class TrainerSAC(BaseTrainer):
                 q_values2 = self.q_critic2(x, actions)[:, firm_id]
                 q_values = torch.minimum(q_values1, q_values2)
                 actor_loss = (
-                    log_probs_firm.sum(dim=1) * self.entropy_reg - q_values
+                    log_probs_firm.mean(dim=1) * self.entropy_reg - q_values
                 ).mean()
 
                 # Optimize for Actor[firm_id]
@@ -273,7 +280,7 @@ class TrainerSAC(BaseTrainer):
 
         # First Step
         for firm_id in order:
-            state, actions, log_probs, _, costs = self.environment.step(firm_id)
+            state, actions, log_probs, revenue, costs = self.environment.step(firm_id)
             all_states[0, :, firm_id, :] = state
             all_actions[0, :, firm_id, :] = actions
             all_rewards[0, :, firm_id, :] = -costs

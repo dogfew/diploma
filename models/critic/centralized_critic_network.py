@@ -1,4 +1,5 @@
 from itertools import chain
+from torch.nn.utils.parametrizations import spectral_norm
 
 import torch.nn as nn
 import torch
@@ -14,11 +15,11 @@ class CentralizedCritic(nn.Module):
 
         input_dim = n_agents * (state_dim + action_dim)
         self.net = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
+            spectral_norm(nn.Linear(input_dim, hidden_dim)),
             nn.Tanh(),
-            nn.Linear(hidden_dim, hidden_dim),
+            spectral_norm(nn.Linear(hidden_dim, hidden_dim)),
             nn.Tanh(),
-            nn.Linear(hidden_dim, n_agents),
+            spectral_norm(nn.Linear(hidden_dim, n_agents)),
         )
 
     def __call__(self, state, action=None):
@@ -44,7 +45,11 @@ class CentralizedCritic2(nn.Module):
     Centralized Critic (arch v.2)
     """
 
-    def __init__(self, state_dim, action_dim, n_agents=2, hidden_dim=32):
+    def __init__(self,
+                 state_dim,
+                 action_dim,
+                 n_agents=2,
+                 hidden_dim=32):
         super().__init__()
         self.net_actions = nn.Sequential(
             nn.Linear(n_agents * action_dim, hidden_dim),
