@@ -29,6 +29,7 @@ class BatchedEnvironment:
             device="cuda",
             invest_functions=None,
     ):
+        self.mode = target
         self.batch_size = batch_size
         self.limit = invest_functions is not None
         self.device = device

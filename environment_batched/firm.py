@@ -101,11 +101,11 @@ class BatchedFirm:
         new_prices = (prices * self.market.max_price).type(self.market.dtype)
         self.market.process_prices(self.id, new_prices)
         return
-        new_prices = price_change_function(
-            self.market.price_matrix[:, self.id], prices
-        ).type(self.market.dtype)
-        self.market.process_prices(self.id, new_prices=new_prices)
-        return new_prices
+        # new_prices = price_change_function(
+        #     self.market.price_matrix[:, self.id], prices
+        # ).type(self.market.dtype)
+        # self.market.process_prices(self.id, new_prices=new_prices)
+        # return new_prices
 
     def receive_revenue(self):
         revenue = self.market.process_gains(self.id)[:, None]
@@ -135,7 +135,7 @@ class BatchedFirm:
         if self.production_reg > 0:
             revenue = revenue.type(torch.float64)
             costs = costs.type(torch.float64)
-            revenue += (produced.sum(dim=1, keepdims=True) + 0.5).log() * self.production_reg
+            costs -= (produced.sum(dim=1, keepdims=True) + 0.5).log() * self.production_reg
         return revenue, costs
 
     def __repr__(self):
@@ -258,7 +258,7 @@ class BatchedLimitFirm(BatchedFirm):
         if self.production_reg > 0:
             revenue = revenue.type(torch.float64)
             costs = costs.type(torch.float64)
-            revenue += (produced.sum(dim=1, keepdims=True) + 0.5).log() * self.production_reg
+            costs -= (produced.sum(dim=1, keepdims=True) + 0.5).log() * self.production_reg
         return revenue, costs
 
     def __repr__(self):

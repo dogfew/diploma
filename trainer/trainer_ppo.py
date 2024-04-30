@@ -80,7 +80,6 @@ class TrainerPPO(BaseTrainer):
             torch.optim.Adam(
                 list(policy.parameters()) + list(self.critic.parameters())
                 if common_optimizer else policy.parameters(),
-                eps=1e-5,
                 lr=actor_lr, weight_decay=0)
             for policy in self.policies
         ]
@@ -187,7 +186,7 @@ class TrainerPPO(BaseTrainer):
                     self.optimize(critic_loss,
                                   self.critic.parameters(),
                                   self.critic_optimizer)
-                    self.optimize(actor_loss + entropy_loss * 0,
+                    self.optimize(actor_loss + entropy_loss * self.entropy_reg,
                                   policies[firm_id].parameters(),
                                   self.actor_optimizers[firm_id])
 
@@ -197,7 +196,6 @@ class TrainerPPO(BaseTrainer):
                             "actor_loss": actor_loss.item(),
                             "critic_loss": critic_loss.item(),
                             "entropy_loss": entropy_loss.item(),
-                            "reward": rewards_debug[firm_id].mean().item(),
                             "firm_id": firm_id,
                         }
                     )
@@ -206,7 +204,10 @@ class TrainerPPO(BaseTrainer):
         if not self.common_optimizer:
             self.critic_scheduler.step()
         self.entropy_reg *= self.entropy_gamma
-        return pd.DataFrame(history).groupby("firm_id").mean()
+
+        df_out = pd.DataFrame(history).groupby("firm_id").mean()
+        df_out['reward'] = rewards_lst.mean(dim=(0, 2)).flatten().cpu().numpy()
+        return df_out
 
     @torch.no_grad()
     def _clip_grad_norm(self, model, norm_type=2):
@@ -275,16 +276,15 @@ class TrainerPPO(BaseTrainer):
             all_values[step] = self.critic(all_states[step])
 
         for firm_id in order:
-            # state, _, _, _, _ = self.environment.step(
-            #     firm_id
-            # )
             state = self.environment.get_state(firm_id)
+            if self.environment.mode == 'finance':
+                all_rewards[-1, :, firm_id] += self.environment.market.gains[:, firm_id].unsqueeze(-1)
             all_states[-1, :, firm_id, :] = state
+        if self.environment.mode == 'finance':
+            all_rewards /= self.environment.market.start_gains
         all_values[-1] = self.critic(all_states[-1])
         all_values = all_values.unsqueeze(-1)
         rewards_to_show = all_rewards.clone()
-        # all_rewards = (all_rewards - all_rewards.mean()) / (all_rewards.std().clamp_min(1e-6))
-        # all_rewards /= self.environment.market.start_gains
         # Compute GAE
         gae = 0
         lambda_ = 0.95

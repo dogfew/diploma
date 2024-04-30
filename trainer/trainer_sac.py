@@ -209,7 +209,6 @@ class TrainerSAC(BaseTrainer):
                             "actor_loss": actor_loss.item(),
                             "critic_loss": critic_loss.item(),
                             "entropy_loss":  log_probs_firm.mean().item(),
-                            "reward": rewards_debug[firm_id].mean().item(),
                             "firm_id": firm_id,
                         }
                     )
@@ -219,7 +218,9 @@ class TrainerSAC(BaseTrainer):
             actor_scheduler.step()
         self.q_critic_scheduler.step()
         self.entropy_reg *= self.entropy_gamma
-        return pd.DataFrame(history).groupby("firm_id").mean()
+        df_out = pd.DataFrame(history).groupby("firm_id").mean()
+        df_out['reward'] = rewards_lst.mean(dim=(0, 2)).flatten().cpu().numpy()
+        return df_out
 
     @torch.no_grad()
     def _clip_grad_norm(self, model, norm_type=2):

@@ -27,13 +27,13 @@ env = BatchedEnvironment(market_kwargs,
                          BetaPolicyNetwork,
                          prod_functions,
                          invest_functions=invest_functions,
-                         target='production',
+                         target='finance',
                          production_reg=0,
-                         batch_size=1)
+                         batch_size=512)
 critic = CentralizedCritic2
 trainer = TrainerSAC(env,
                      q_critic=critic,
-                     batch_size=1,
+                     batch_size=512,
                      learning_rates=(3e-4, 3e-4),
                      buffer_size=8192 * 64,
                      entropy_reg=0.01,

@@ -11,7 +11,7 @@ torch.backends.cudnn.deterministic = True
 device = 'cuda'
 market_kwargs = dict(start_volumes=10,
                      base_price=50,
-                     start_gains=100,
+                     start_gains=500,
                      deprecation_steps=5,
                      max_price=100,
                      )
@@ -28,7 +28,7 @@ env = BatchedEnvironment(market_kwargs,
                          prod_functions,
                          invest_functions=invest_functions,
                          target='production',
-                         production_reg=0,
+                         production_reg=1,  # 10 is good
                          device=device,
                          batch_size=512)
 critic = CentralizedCriticV
@@ -36,14 +36,15 @@ trainer = TrainerPPO(env,
                      critic=critic,
                      learning_rates=(3e-3, 3e-4),
                      batch_size=512,
-                     entropy_reg=0.03,
+                     entropy_reg=0.1,
                      buffer_size=8192 * 64,
                      device=device,
-                     entropy_gamma=1,
-                     lr_gamma=0.99
+                     entropy_gamma=0.999,
+                     lr_gamma=0.991,
+                     common_optimizer=True
                      )
 # trainer.train_epoch(1)
-trainer.train(100, episode_length=32, debug_period=10)
+trainer.train(300, episode_length=32, debug_period=10)
 env.change_batch_size(1)
 env.reset()
 n_periods = 64
