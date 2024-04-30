@@ -45,17 +45,17 @@ class TrainerPPO(BaseTrainer):
             market, limit=environment.limit
         )
         n_firms = market.n_firms
-        # Replay Buffer
         self.use_buffer = use_buffer
-
-        self.buffer = ReplayBufferPPO(
-            state_dim=state_dim,
-            action_dim=action_dim,
-            prob_dim=self.environment.probs_dim,
-            n_firms=n_firms,
-            size=buffer_size,
-            device=device
-        )
+        if self.use_buffer:
+            # Replay Buffer
+            self.buffer = ReplayBufferPPO(
+                state_dim=state_dim,
+                action_dim=action_dim,
+                prob_dim=self.environment.probs_dim,
+                n_firms=n_firms,
+                size=buffer_size,
+                device=device
+            )
 
         # Critic that returns Q-value (1)
         self.critic = critic(
@@ -80,6 +80,7 @@ class TrainerPPO(BaseTrainer):
             torch.optim.Adam(
                 list(policy.parameters()) + list(self.critic.parameters())
                 if common_optimizer else policy.parameters(),
+                eps=1e-5,
                 lr=actor_lr, weight_decay=0)
             for policy in self.policies
         ]
@@ -126,7 +127,6 @@ class TrainerPPO(BaseTrainer):
             pbar.set_postfix(
                 {
                     "LR": self.critic_scheduler.get_last_lr()[0],
-                    "Buffer Index": self.buffer.index,
                     "Order": str(order),
                 }
             )
@@ -164,12 +164,14 @@ class TrainerPPO(BaseTrainer):
                     advantages = ((advantages - advantages.mean())
                                   / (advantages.std().clamp_min(1e-6)))
 
-                with torch.no_grad():
-                    actions = self.environment.restore_actions(
-                        actions[:, firm_id].squeeze()
-                    )
+                actions_restored = self.environment.restore_actions(
+                    actions[:, firm_id].squeeze()
+                )
                 log_probs_new = torch.concatenate(
-                    policies[firm_id].get_log_probs(x[:, firm_id], actions), dim=-1)
+                    policies[firm_id].get_log_probs(
+                        state=x[:, firm_id],
+                        actions=actions_restored),
+                    dim=-1)
                 ratios = torch.exp(log_probs_new - log_probs_old[:, firm_id, :])
                 actor_loss = - torch.minimum(advantages * ratios,
                                              advantages * ratios.clamp(1-self.cliprange,
@@ -185,7 +187,7 @@ class TrainerPPO(BaseTrainer):
                     self.optimize(critic_loss,
                                   self.critic.parameters(),
                                   self.critic_optimizer)
-                    self.optimize(actor_loss + entropy_loss * self.entropy_reg,
+                    self.optimize(actor_loss + entropy_loss * 0,
                                   policies[firm_id].parameters(),
                                   self.actor_optimizers[firm_id])
 
@@ -201,7 +203,8 @@ class TrainerPPO(BaseTrainer):
                     )
         for actor_scheduler in self.actor_schedulers:
             actor_scheduler.step()
-        # self.critic_scheduler.step()
+        if not self.common_optimizer:
+            self.critic_scheduler.step()
         self.entropy_reg *= self.entropy_gamma
         return pd.DataFrame(history).groupby("firm_id").mean()
 
@@ -275,8 +278,7 @@ class TrainerPPO(BaseTrainer):
             # state, _, _, _, _ = self.environment.step(
             #     firm_id
             # )
-            state = get_state_log(self.environment.market,
-                                  self.environment.firms[firm_id])
+            state = self.environment.get_state(firm_id)
             all_states[-1, :, firm_id, :] = state
         all_values[-1] = self.critic(all_states[-1])
         all_values = all_values.unsqueeze(-1)
@@ -293,7 +295,6 @@ class TrainerPPO(BaseTrainer):
 
             delta = current_rewards + self.gamma * next_values - current_values
             all_advantages[t] = gae = delta + self.gamma * lambda_ * gae
-
         all_value_targets = all_advantages + all_values[:-1]
         trajectory = dict(
             x=all_states[:-1],
@@ -305,9 +306,9 @@ class TrainerPPO(BaseTrainer):
             log_probs=all_log_probs
         )
         # Permute Batch
-        idxs = torch.randperm(total_steps * batch_size)
+        permutation = torch.randperm(total_steps * batch_size)
         for key in trajectory:
-            trajectory[key] = trajectory[key].flatten(0, 1)[idxs]
+            trajectory[key] = trajectory[key].flatten(0, 1)[permutation]
         if self.use_buffer:
             self.buffer.add_batch(trajectory)
         return trajectory, rewards_to_show.permute(0, 2, 1, 3)

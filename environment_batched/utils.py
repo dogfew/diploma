@@ -82,7 +82,6 @@ def get_log_probs_dim(market, limit=False):
             + market.n_branches
             + market.n_branches
             + 2
-            + limit
     )
 
 

@@ -46,6 +46,7 @@ class BetaPolicyNetwork(nn.Module):
             nn.Unflatten(-1, (n_branches, 2)),
         )
         self.init_weights()
+        self.i = 0
         # self.apply_spectral_norm(self)
 
     def apply_spectral_norm(self, module):
@@ -60,14 +61,9 @@ class BetaPolicyNetwork(nn.Module):
         According to paper: https://arxiv.org/pdf/2006.05990
         :return:
         """
-        # for module in [self.buy, self.sale, self.use, self.prices]:
-        #     for layer in module:
-        #         if isinstance(layer, nn.Linear):
-        #             nn.init.orthogonal_(layer.weight, 1.41)
         for module in [self.buy, self.sale, self.use, self.prices]:
             for layer in module:
                 if isinstance(layer, nn.Linear):
-                    # nn.init.uniform_(layer.weight, 0, 0.01)
                     nn.init.xavier_uniform_(layer.weight)
                     layer.weight.data /= 100
     @property
@@ -102,6 +98,10 @@ class BetaPolicyNetwork(nn.Module):
 
         buy_log_prob = buy_distr.log_prob(percent_to_buy)
         use_log_prob = use_distr.log_prob(percent_to_use)
+        if self.i == -1:
+            print("Sale", percent_to_sale)
+            print("Use", percent_to_use)
+            self.i += 1
         if buy_log_prob.dim() == 0:
             percent_to_use = percent_to_use[:, :-1].flatten()
         else:
@@ -138,7 +138,6 @@ class BetaPolicyNetwork(nn.Module):
             Dirichlet(use_params).log_prob(percent_to_use),
             Beta(prices_params[..., 0], prices_params[..., 1]).log_prob(prices),
         )
-
         return log_probs
 
 class BetaPolicyNetwork2(BetaPolicyNetwork):

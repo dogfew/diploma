@@ -3,7 +3,7 @@ from environment_batched import BatchedMarket, BatchedLeontief, BatchedFirm, Bat
 from models.policy import BetaPolicyNetwork, DeterministicPolicyNetwork, BetaPolicyNetwork2
 from models.critic import CentralizedCritic, CentralizedCritic2
 from models.utils import get_state, get_state_dim, process_actions, get_action_dim
-from trainer import TrainerAC, TrainerSAC, Trainer3
+from trainer import TrainerAC, TrainerSAC
 from utils.plotting import plot_actions, plot_environment, plot_volumes
 
 torch.manual_seed(123)
@@ -26,21 +26,21 @@ invest_functions = [
 env = BatchedEnvironment(market_kwargs,
                          BetaPolicyNetwork,
                          prod_functions,
-                         invest_functions=None,
+                         invest_functions=invest_functions,
                          target='production',
                          production_reg=0,
-                         batch_size=512)
+                         batch_size=1)
 critic = CentralizedCritic2
 trainer = TrainerSAC(env,
                      q_critic=critic,
-                     batch_size=512,
+                     batch_size=1,
                      learning_rates=(3e-4, 3e-4),
                      buffer_size=8192 * 64,
                      entropy_reg=0.01,
                      entropy_gamma=1
                      )
 # trainer.train_epoch()
-trainer.train(100, episode_length=32, shuffle_order=False)
+trainer.train(100, episode_length=1, shuffle_order=False)
 #
 env.change_batch_size(1)
 env.reset()

@@ -3,7 +3,7 @@ from environment_batched import BatchedMarket, BatchedLeontief, BatchedFirm, Bat
 from models.policy import BetaPolicyNetwork, DeterministicPolicyNetwork, BetaPolicyNetwork2
 from models.critic import CentralizedCritic, CentralizedCriticV
 from models.utils import get_state, get_state_dim, process_actions, get_action_dim
-from trainer import TrainerPPO, TrainerSAC, Trainer3
+from trainer import TrainerPPO, TrainerSAC
 from utils.plotting import plot_actions, plot_environment, plot_volumes
 
 torch.manual_seed(123)
@@ -26,7 +26,7 @@ invest_functions = [
 env = BatchedEnvironment(market_kwargs,
                          BetaPolicyNetwork,
                          prod_functions,
-                         invest_functions=None,
+                         invest_functions=invest_functions,
                          target='production',
                          production_reg=0,
                          device=device,
@@ -43,7 +43,7 @@ trainer = TrainerPPO(env,
                      lr_gamma=0.99
                      )
 # trainer.train_epoch(1)
-trainer.train(500, episode_length=32, debug_period=50)
+trainer.train(100, episode_length=32, debug_period=10)
 env.change_batch_size(1)
 env.reset()
 n_periods = 64
