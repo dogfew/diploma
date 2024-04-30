@@ -36,15 +36,14 @@ trainer = TrainerPPO(env,
                      critic=critic,
                      learning_rates=(3e-3, 3e-4),
                      batch_size=512,
-                     entropy_reg=0.05,
+                     entropy_reg=0.03,
                      buffer_size=8192 * 64,
                      device=device,
                      entropy_gamma=1,
                      lr_gamma=0.99
-                     # entropy_gamma=1
                      )
 # trainer.train_epoch(1)
-trainer.train(500, episode_length=32, debug_period=10)
+trainer.train(500, episode_length=32, debug_period=50)
 env.change_batch_size(1)
 env.reset()
 n_periods = 64

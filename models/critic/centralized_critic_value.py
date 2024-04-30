@@ -22,6 +22,16 @@ class CentralizedCriticV(nn.Module):
             nn.Tanh(),
             nn.Linear(hidden_dim, n_agents),
         )
+        # self.init_weights()
+
+    def init_weights(self):
+        """
+        According to paper: https://arxiv.org/pdf/2006.05990
+        :return:
+        """
+        for layer in self.net:
+            if isinstance(layer, nn.Linear):
+                nn.init.orthogonal_(layer.weight, 2 ** 0.5)
 
     def __call__(self, state):
         """

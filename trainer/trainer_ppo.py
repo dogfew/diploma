@@ -28,11 +28,13 @@ class TrainerPPO(BaseTrainer):
             learning_rates=(3e-4, 3e-4),
             critic_hidden_dim=64,
             buffer_size=8192 * 16,
-            batch_size=3,
+            batch_size=512,
             lr_gamma=0.99,
             entropy_gamma=0.999,
             max_grad_norm=0.5,
             normalize_advantages=True,
+            common_optimizer=True,
+            use_buffer=False,
             device="cuda",
     ):
         super().__init__(environment)
@@ -44,6 +46,8 @@ class TrainerPPO(BaseTrainer):
         )
         n_firms = market.n_firms
         # Replay Buffer
+        self.use_buffer = use_buffer
+
         self.buffer = ReplayBufferPPO(
             state_dim=state_dim,
             action_dim=action_dim,
@@ -54,7 +58,6 @@ class TrainerPPO(BaseTrainer):
         )
 
         # Critic that returns Q-value (1)
-        # self.critic_loss = nn.MSELoss()
         self.critic = critic(
             state_dim=state_dim,
             n_agents=n_firms,
@@ -74,7 +77,10 @@ class TrainerPPO(BaseTrainer):
 
         # Actors
         self.actor_optimizers = [
-            torch.optim.Adam(list(policy.parameters()), lr=actor_lr, weight_decay=0)
+            torch.optim.Adam(
+                list(policy.parameters()) + list(self.critic.parameters())
+                if common_optimizer else policy.parameters(),
+                lr=actor_lr, weight_decay=0)
             for policy in self.policies
         ]
         self.actor_schedulers = [
@@ -88,6 +94,7 @@ class TrainerPPO(BaseTrainer):
         self.window_size = 10
 
         # Hyperparams
+        self.common_optimizer = common_optimizer
         self.normalize_advantages = normalize_advantages
         self.cliprange = 0.2
         self.gamma = gamma
@@ -127,13 +134,21 @@ class TrainerPPO(BaseTrainer):
     def train_epoch(self, max_episode_length=32, order: list[int] = None):
         self.environment.reset()
         history = []
-        _, rewards_lst = self.get_trajectory(num_steps=max_episode_length, order=order)
+        trajectory, rewards_lst = self.get_trajectory(num_steps=max_episode_length, order=order)
         policies = self.policies
 
         for idx in range(max_episode_length):
             rewards_debug = rewards_lst[idx]
+            if self.use_buffer:
+                # Sample from buffer
+                sampled = self.buffer.sample(self.batch_size)
+            else:
+                sampled = map(
+                    lambda y: trajectory.get(y)[idx * self.batch_size: (idx + 1) * self.batch_size],
+                    ['x', 'x_next', 'actions', 'values', 'advantages', 'value_targets', 'log_probs']
+                )
+            x, x_next, actions, values, all_advantages, value_targets, log_probs_old = sampled
             for firm_id in range(self.n_agents):
-                x, x_next, actions, values, all_advantages, value_targets, log_probs_old = self.buffer.sample(self.batch_size)
                 # Compute Critic Loss
                 v = self.critic(x).unsqueeze(-1)[:, firm_id]
                 v_old = values[:, firm_id]
@@ -142,12 +157,6 @@ class TrainerPPO(BaseTrainer):
                     (v - v_hat).pow(2),
                     (v.clamp(v_old-self.cliprange, v_old+self.cliprange) - v_hat).pow(2)
                 ).mean()
-                # Optimize for Centralized Critic
-                self.optimize(
-                    critic_loss,
-                    list(self.critic.parameters()),
-                    self.critic_optimizer,
-                )
 
                 # Compute Actor Loss
                 advantages = all_advantages[:, firm_id]
@@ -166,12 +175,19 @@ class TrainerPPO(BaseTrainer):
                                              advantages * ratios.clamp(1-self.cliprange,
                                                                        1+self.cliprange)).mean()
                 entropy_loss = - log_probs_new.mean()
-                # Optimize for Actor[firm_id]
-                self.optimize(
-                    actor_loss + entropy_loss * self.entropy_reg,
-                    list(policies[firm_id].parameters()),
-                    self.actor_optimizers[firm_id],
-                )
+                if self.common_optimizer:
+                    self.optimize(
+                        loss=critic_loss + actor_loss + entropy_loss * self.entropy_reg,
+                        params=list(policies[firm_id].parameters()) + list(self.critic.parameters()),
+                        optimizer=self.actor_optimizers[firm_id],
+                    )
+                else:
+                    self.optimize(critic_loss,
+                                  self.critic.parameters(),
+                                  self.critic_optimizer)
+                    self.optimize(actor_loss + entropy_loss * self.entropy_reg,
+                                  policies[firm_id].parameters(),
+                                  self.actor_optimizers[firm_id])
 
                 with torch.no_grad():
                     history.append(
@@ -185,7 +201,7 @@ class TrainerPPO(BaseTrainer):
                     )
         for actor_scheduler in self.actor_schedulers:
             actor_scheduler.step()
-        self.critic_scheduler.step()
+        # self.critic_scheduler.step()
         self.entropy_reg *= self.entropy_gamma
         return pd.DataFrame(history).groupby("firm_id").mean()
 
@@ -289,7 +305,9 @@ class TrainerPPO(BaseTrainer):
             log_probs=all_log_probs
         )
         # Permute Batch
+        idxs = torch.randperm(total_steps * batch_size)
         for key in trajectory:
-            trajectory[key] = trajectory[key].flatten(0, 1)
-        self.buffer.add_batch(trajectory)
+            trajectory[key] = trajectory[key].flatten(0, 1)[idxs]
+        if self.use_buffer:
+            self.buffer.add_batch(trajectory)
         return trajectory, rewards_to_show.permute(0, 2, 1, 3)

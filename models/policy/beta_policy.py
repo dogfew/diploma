@@ -67,6 +67,7 @@ class BetaPolicyNetwork(nn.Module):
         for module in [self.buy, self.sale, self.use, self.prices]:
             for layer in module:
                 if isinstance(layer, nn.Linear):
+                    # nn.init.uniform_(layer.weight, 0, 0.01)
                     nn.init.xavier_uniform_(layer.weight)
                     layer.weight.data /= 100
     @property
@@ -75,34 +76,6 @@ class BetaPolicyNetwork(nn.Module):
 
     def main_forward(self, state):
         return self.net(state)
-
-    def get_log_probs(self, state, actions):
-        (percent_to_buy,
-         percent_to_sale,
-         percent_to_use,
-         prices
-         ) = actions
-        x = self.main_forward(state)
-        # print("X NEW", x)
-        buy_params = self.buy(x)
-        sale_params = self.sale(x)
-        use_params = self.use(x)
-        prices_params = self.prices(x)
-        buy_distr = Dirichlet(buy_params)
-        sale_distr = Beta(sale_params[..., 0], sale_params[..., 1])
-        use_distr = Dirichlet(use_params)
-        price_distr = Beta(prices_params[..., 0], prices_params[..., 1])
-
-        buy_log_prob = buy_distr.log_prob(percent_to_buy)
-        use_log_prob = use_distr.log_prob(percent_to_use)
-        log_probs = (
-            buy_log_prob.unsqueeze(-1),
-            sale_distr.log_prob(percent_to_sale),
-            use_log_prob,
-            price_distr.log_prob(prices),
-        )
-
-        return log_probs
 
     def forward(self, state):
         """
@@ -147,6 +120,26 @@ class BetaPolicyNetwork(nn.Module):
         )
         return actions, log_probs
 
+    def get_log_probs(self, state, actions):
+        (percent_to_buy,
+         percent_to_sale,
+         percent_to_use,
+         prices
+         ) = actions
+        x = self.main_forward(state)
+        buy_params = self.buy(x)
+        sale_params = self.sale(x)
+        use_params = self.use(x)
+        prices_params = self.prices(x)
+
+        log_probs = (
+            Dirichlet(buy_params).log_prob(percent_to_buy).unsqueeze(-1),
+            Beta(sale_params[..., 0], sale_params[..., 1]).log_prob(percent_to_sale),
+            Dirichlet(use_params).log_prob(percent_to_use),
+            Beta(prices_params[..., 0], prices_params[..., 1]).log_prob(prices),
+        )
+
+        return log_probs
 
 class BetaPolicyNetwork2(BetaPolicyNetwork):
     def __init__(
