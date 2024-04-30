@@ -40,7 +40,7 @@ trainer = TrainerSAC(env,
                      entropy_gamma=1
                      )
 # trainer.train_epoch()
-trainer.train(500, episode_length=32, shuffle_order=False)
+trainer.train(100, episode_length=32, shuffle_order=False)
 #
 env.change_batch_size(1)
 env.reset()

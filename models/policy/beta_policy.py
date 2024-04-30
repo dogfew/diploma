@@ -19,35 +19,41 @@ class BetaPolicyNetwork(nn.Module):
         self.eps = eps
         self.min_log_prob = min_log_prob
         self.net = nn.Sequential(
-            spectral_norm(nn.Linear(state_dim, hidden_dim)),
-            nn.Tanh(),  # Limiting max value to avoid overflow.
-            spectral_norm(nn.Linear(hidden_dim, hidden_dim)),
-            nn.Tanh(),  # Limiting max value to avoid overflow.
+            nn.Linear(state_dim, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Tanh(),
         )
 
         self.buy = nn.Sequential(
-            spectral_norm(nn.Linear(hidden_dim, n_firms * n_branches + 1)),
+            nn.Linear(hidden_dim, n_firms * n_branches + 1),
             nn.Softplus(),
-            # nn.Hardtanh(min_val=self.eps, max_val=1e8),  # to prevent nans
         )
         self.sale = nn.Sequential(
-            spectral_norm(nn.Linear(hidden_dim, 2 * n_branches)),
+            nn.Linear(hidden_dim, 2 * n_branches),
             nn.Softplus(),
             nn.Unflatten(-1, (n_branches, 2)),
         )
 
         self.use = nn.Sequential(
-            spectral_norm(nn.Linear(hidden_dim, 2 * n_branches if not limit else 3 * n_branches)),
+            nn.Linear(hidden_dim, 2 * n_branches if not limit else 3 * n_branches),
             nn.Softplus(),
-            # nn.Hardtanh(min_val=self.eps, max_val=1e8),  # to prevent nans
             nn.Unflatten(-1, (n_branches, 2 + limit)),
         )
         self.prices = nn.Sequential(
-            spectral_norm(nn.Linear(hidden_dim, 2 * n_branches)),
+            nn.Linear(hidden_dim, 2 * n_branches),
             nn.Softplus(),
             nn.Unflatten(-1, (n_branches, 2)),
         )
         self.init_weights()
+        # self.apply_spectral_norm(self)
+
+    def apply_spectral_norm(self, module):
+        for child in module.children():
+            if isinstance(child, nn.Linear):
+                nn.utils.spectral_norm(child)
+            elif isinstance(child, nn.Module):
+                self.apply_spectral_norm(child)
 
     def init_weights(self):
         """
@@ -70,6 +76,34 @@ class BetaPolicyNetwork(nn.Module):
     def main_forward(self, state):
         return self.net(state)
 
+    def get_log_probs(self, state, actions):
+        (percent_to_buy,
+         percent_to_sale,
+         percent_to_use,
+         prices
+         ) = actions
+        x = self.main_forward(state)
+        # print("X NEW", x)
+        buy_params = self.buy(x)
+        sale_params = self.sale(x)
+        use_params = self.use(x)
+        prices_params = self.prices(x)
+        buy_distr = Dirichlet(buy_params)
+        sale_distr = Beta(sale_params[..., 0], sale_params[..., 1])
+        use_distr = Dirichlet(use_params)
+        price_distr = Beta(prices_params[..., 0], prices_params[..., 1])
+
+        buy_log_prob = buy_distr.log_prob(percent_to_buy)
+        use_log_prob = use_distr.log_prob(percent_to_use)
+        log_probs = (
+            buy_log_prob.unsqueeze(-1),
+            sale_distr.log_prob(percent_to_sale),
+            use_log_prob,
+            price_distr.log_prob(prices),
+        )
+
+        return log_probs
+
     def forward(self, state):
         """
         :param state: [batch_size, features]
@@ -78,7 +112,7 @@ class BetaPolicyNetwork(nn.Module):
             log_probs: [batch_size, n_actions]
         """
         x = self.main_forward(state)
-
+        # print("X OLD", x)
         buy_params = self.buy(x)
         sale_params = self.sale(x)
         use_params = self.use(x)

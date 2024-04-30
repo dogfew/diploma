@@ -141,9 +141,7 @@ class TrainerSAC(BaseTrainer):
             rewards_debug = rewards_lst[idx]
             for firm_id in range(self.n_agents):
                 # Extract Batch and move it to device
-                x, x_next, actions, rewards = map(
-                    lambda i: i.to(self.device), self.buffer.sample(self.batch_size)
-                )
+                x, x_next, actions, rewards = self.buffer.sample(self.batch_size)
                 policies = self.policies
 
                 # # Normalize rewards
@@ -210,6 +208,7 @@ class TrainerSAC(BaseTrainer):
                         {
                             "actor_loss": actor_loss.item(),
                             "critic_loss": critic_loss.item(),
+                            "entropy_loss":  log_probs_firm.mean().item(),
                             "reward": rewards_debug[firm_id].mean().item(),
                             "firm_id": firm_id,
                         }
@@ -283,7 +282,7 @@ class TrainerSAC(BaseTrainer):
             state, actions, log_probs, revenue, costs = self.environment.step(firm_id)
             all_states[0, :, firm_id, :] = state
             all_actions[0, :, firm_id, :] = actions
-            all_rewards[0, :, firm_id, :] = -costs
+            all_rewards[0, :, firm_id, :] = revenue - costs
 
         # Other steps
         for step in range(1, total_steps):

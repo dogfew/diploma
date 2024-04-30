@@ -43,24 +43,24 @@ class BaseTrainer:
     @torch.no_grad()
     def plot_loss(self, df_list) -> None:
         clear_output(True)
-        fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(21, 6))
+        fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(14, 12))  # Изменим размер и расположение графиков
         df = pd.concat(df_list).reset_index()
         for firm_id, group in df.groupby("firm_id"):
             color = self.color_map[firm_id]
 
-            ax[0].plot(
+            ax[0, 0].plot(
                 group["episode"],
                 group["actor_loss"],
                 label=f"Firm {firm_id}",
                 color=color,
             )
-            ax[1].plot(
+            ax[0, 1].plot(
                 group["episode"],
                 group["critic_loss"],
                 label=f"Firm {firm_id}",
                 color=color,
             )
-            ax[2].plot(
+            ax[1, 0].plot(
                 group["episode"],
                 group["reward"],
                 label=f"Firm {firm_id}",
@@ -68,35 +68,45 @@ class BaseTrainer:
                 color=color,
                 linestyle="--",
             )
-
             window_size = self.window_size if hasattr(self, "window_size") else 1
-            ax[2].plot(
+            ax[1, 0].plot(
                 group["episode"],
                 group["reward"].rolling(window=window_size).mean(),
                 color=color,
                 linewidth=3,
             )
+            ax[1, 1].plot(
+                group["episode"],
+                group["entropy_loss"],
+                label=f"Firm {firm_id}",
+                color=color,
+            )
 
-        ax[0].set_xlabel("Epoch")
-        ax[0].set_ylabel("Actor Loss")
-        ax[0].set_title("Actor Loss Dynamics")
-        ax[0].legend()
-        ax[0].grid(True)
+        ax[0, 0].set_xlabel("Epoch")
+        ax[0, 0].set_ylabel("Actor Loss")
+        ax[0, 0].set_title("Actor Loss Dynamics")
+        ax[0, 0].legend()
+        ax[0, 0].grid(True)
 
-        ax[1].set_xlabel("Epoch")
-        ax[1].set_title("Critic Loss Dynamics")
-        ax[1].legend()
-        # ax[1].set_yscale("log")
-        ax[1].grid(True, axis="y")
+        ax[0, 1].set_xlabel("Epoch")
+        ax[0, 1].set_title("Critic Loss Dynamics")
+        ax[0, 1].legend()
+        ax[0, 1].grid(True)
 
-        ax[2].set_xlabel("Epoch")
-        ax[2].set_ylabel("Mean Reward")
-        ax[2].set_title("Mean Reward Dynamics")
-        ax[2].legend()
-        ax[2].grid(True)
-        # ax[2].set_yscale("symlog")
-        ax[2].axhline(y=0, color="grey", linestyle="--", label="Zero Profit")
-        plt.grid()
+        ax[1, 0].set_xlabel("Epoch")
+        ax[1, 0].set_ylabel("Mean Reward")
+        ax[1, 0].set_title("Mean Reward Dynamics")
+        ax[1, 0].legend()
+        ax[1, 0].grid(True)
+        ax[1, 0].axhline(y=0, color="grey", linestyle="--", label="Zero Profit")
+
+        ax[1, 1].set_xlabel("Epoch")
+        ax[1, 1].set_ylabel("Entropy Loss")
+        ax[1, 1].set_title("Entropy Loss Dynamics")
+        ax[1, 1].legend()
+        ax[1, 1].grid(True)
+
+        plt.tight_layout()
         plt.show()
 
     @torch.no_grad()

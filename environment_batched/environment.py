@@ -9,7 +9,7 @@ from tensordict import TensorDictBase, TensorDict
 
 from .market import BatchedMarket
 from .firm import BatchedFirm, BatchedLimitFirm, BatchedLimitProductionFirm, BatchedProductionFirm
-from .utils import get_state_log, get_state_dim, get_action_dim, process_actions
+from .utils import get_state_log, get_state_dim, get_action_dim, process_actions, get_log_probs_dim
 
 
 class BatchedEnvironment:
@@ -59,6 +59,7 @@ class BatchedEnvironment:
 
         self.state_dim = get_state_dim(self.market, self.limit)
         self.action_dim = get_action_dim(self.market, self.limit)
+        self.probs_dim = get_log_probs_dim(self.market, self.limit)
         self.policies = [
             policy_class(
                 hidden_dim=hidden_dim,
@@ -122,6 +123,19 @@ class BatchedEnvironment:
         processed_actions = process_actions(actions, self.market.price_matrix.shape)
         revenue, costs = firm.step(*processed_actions)
         return state, actions_concatenated, log_probs_concatenated, revenue, costs
+
+    def restore_actions(self, actions):
+        if actions.dim() == 1:
+            actions = actions.unsqueeze(dim=0)
+        percent_to_buy, percent_to_sale, percent_to_use, prices = torch.split(
+            actions, self.actions_split_sizes, dim=1
+        )
+        percent_to_use = torch.stack([percent_to_use, 1 - percent_to_use], dim=-1)
+        return (percent_to_buy,
+                percent_to_sale,
+                percent_to_use,
+                prices
+                )
 
     @torch.no_grad()
     def step_and_record(self, firm_id):

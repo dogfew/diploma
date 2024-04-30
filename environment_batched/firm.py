@@ -306,7 +306,7 @@ class BatchedLimitProductionFirm(BatchedLimitFirm):
         revenue -= - used_reserves_invest.sum(dim=1, keepdims=True)
         revenue -= used_reserves_produce.sum(dim=1, keepdims=True)
         costs = torch.zeros_like(revenue)
-        return revenue.log1p(), costs
+        return costs, -(revenue + 0.5).log()
 
 
 class BatchedProductionFirm(BatchedFirm):
@@ -337,4 +337,4 @@ class BatchedProductionFirm(BatchedFirm):
         revenue = new_reserves.sum(dim=1, keepdims=True)
         revenue -= used_reserves_produce.sum(dim=1, keepdims=True)
         costs = torch.zeros_like(revenue)
-        return revenue.log1p(), costs
+        return costs, -(revenue + 0.5).log()
