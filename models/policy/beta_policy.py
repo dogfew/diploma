@@ -4,16 +4,17 @@ from torch.distributions import Beta, Dirichlet
 from torch.nn.utils import spectral_norm
 from models.utils.initialization import orthogonal_init
 
+
 class BetaPolicyNetwork(nn.Module):
     def __init__(
-        self,
-        state_dim,
-        n_branches,
-        n_firms,
-        hidden_dim=64,
-        limit=False,
-        eps=1e-8,
-        min_log_prob=-10,
+            self,
+            state_dim,
+            n_branches,
+            n_firms,
+            hidden_dim=64,
+            limit=False,
+            eps=1e-8,
+            min_log_prob=-10,
     ):
         super().__init__()
         self.eps = eps
@@ -48,6 +49,7 @@ class BetaPolicyNetwork(nn.Module):
         self.init_weights()
         self.i = 0
         # self.apply_spectral_norm(self)
+
     #
     # def apply_spectral_norm(self, module):
     #     for child in module.children():
@@ -70,6 +72,7 @@ class BetaPolicyNetwork(nn.Module):
                     orthogonal_init(layer, std=0.01)
                     # nn.init.xavier_uniform_(layer.weight)
                     # layer.weight.data /= 100
+
     @property
     def device(self):
         return next(self.parameters()).device
@@ -85,7 +88,6 @@ class BetaPolicyNetwork(nn.Module):
             log_probs: [batch_size, n_actions]
         """
         x = self.main_forward(state)
-        # print("X OLD", x)
         buy_params = self.buy(x)
         sale_params = self.sale(x)
         use_params = self.use(x)
@@ -102,10 +104,6 @@ class BetaPolicyNetwork(nn.Module):
 
         buy_log_prob = buy_distr.log_prob(percent_to_buy)
         use_log_prob = use_distr.log_prob(percent_to_use)
-        if self.i == -1:
-            print("Sale", percent_to_sale)
-            print("Use", percent_to_use)
-            self.i += 1
         if buy_log_prob.dim() == 0:
             percent_to_use = percent_to_use[:, :-1].flatten()
         else:
@@ -144,9 +142,10 @@ class BetaPolicyNetwork(nn.Module):
         )
         return log_probs
 
+
 class BetaPolicyNetwork2(BetaPolicyNetwork):
     def __init__(
-        self, state_dim, n_branches, n_firms, hidden_dim=32, limit=False, eps=1e-8
+            self, state_dim, n_branches, n_firms, hidden_dim=32, limit=False, eps=1e-8
     ):
         super().__init__(state_dim, n_branches, n_firms, hidden_dim, limit, eps)
         self.net = nn.Sequential(

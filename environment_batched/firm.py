@@ -107,6 +107,13 @@ class BatchedFirm:
         # self.market.process_prices(self.id, new_prices=new_prices)
         # return new_prices
 
+    def define_prices_percent(self, percent):
+        new_prices = price_change_function(
+            self.market.price_matrix[:, self.id], percent
+        ).type(self.market.dtype)
+        self.market.process_prices(self.id, new_prices=new_prices)
+        return new_prices
+
     def receive_revenue(self):
         revenue = self.market.process_gains(self.id)[:, None]
         self.financial_resources += revenue
@@ -303,10 +310,9 @@ class BatchedLimitProductionFirm(BatchedLimitFirm):
         self.define_prices(prices)
         self.sell(percent_to_sale)
         revenue = new_reserves.sum(dim=1, keepdims=True)
-        revenue -= used_reserves_produce.sum(dim=1, keepdims=True)
+        # revenue -= used_reserves_produce.sum(dim=1, keepdims=True)
         costs = torch.zeros_like(revenue).float()
         return costs, -(revenue + 0.5).log()
-
 
 
 class BatchedProductionFirm(BatchedFirm):
@@ -335,6 +341,6 @@ class BatchedProductionFirm(BatchedFirm):
         self.define_prices(prices)
         self.sell(percent_to_sale)
         revenue = new_reserves.sum(dim=1, keepdims=True)
-        revenue -= used_reserves_produce.sum(dim=1, keepdims=True)
+        # revenue -= used_reserves_produce.sum(dim=1, keepdims=True)
         costs = torch.zeros_like(revenue).float()
         return costs, -(revenue + 0.5).log()

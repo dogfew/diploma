@@ -14,6 +14,7 @@ class BatchedLeontief:
         :param output_tensor: [n_branches]
         """
         self.device = device
+        self.n_branches = input_tensor.shape[0]
         self.input_tensor = input_tensor.to(device)
         self.output_tensor = output_tensor.to(device)
         self.dtype = input_tensor.dtype

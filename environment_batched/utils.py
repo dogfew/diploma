@@ -15,8 +15,8 @@ def process_actions(actions, size):
 def get_state_dim(market, limit=False) -> int:
     return (
             2 * math.prod(market.price_matrix.shape[1:])
-            + market.price_matrix.shape[2] * (1 + limit)
-            + 1
+            + market.price_matrix.shape[2]
+            + 1 + limit * 2
     )
 
 
@@ -76,13 +76,8 @@ def get_action_dim(market, limit=False):
     )
 
 
-def get_log_probs_dim(market, limit=False):
-    return (
-            1
-            + market.n_branches
-            + market.n_branches
-            + 2
-    )
+def get_log_probs_dim(market, **kwargs):
+    return 1 + market.n_branches * 3
 
 
 def price_change_function(current_prices, change):

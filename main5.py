@@ -9,23 +9,27 @@ import torch.nn.functional as F
 torch.manual_seed(123)
 torch.backends.cudnn.deterministic = True
 device = 'cuda'
-market_kwargs = dict(start_volumes=2,
+market_kwargs = dict(start_volumes=10,
                      base_price=50,
                      start_gains=500,
                      deprecation_steps=5,
                      max_price=100)
 prod_functions = [
-    BatchedLeontief(torch.tensor([1, 0]), torch.tensor([0, 2]), device=device),
-    BatchedLeontief(torch.tensor([0, 1]), torch.tensor([2, 0]), device=device),
+    BatchedLeontief(torch.tensor([0, 1, 1]), torch.tensor([3, 0, 0]), device=device),  # 0 товара А + 1 товар  Б => 2 товара А.
+    BatchedLeontief(torch.tensor([1, 0, 1]), torch.tensor([0, 3, 0]), device=device),  # 0 товара А + 1 товар  Б => 2 товара А.
+    BatchedLeontief(torch.tensor([1, 1, 0]), torch.tensor([0, 0, 3]), device=device),  # 0 товара А + 1 товар  Б => 2 товара А.
 ]
+
+# Инвестиционные функции
 invest_functions = [
-    BatchedLeontief(torch.tensor([1, 1]), torch.tensor(2), device=device),
-    BatchedLeontief(torch.tensor([1, 1]), torch.tensor(2), device=device),
+    BatchedLeontief(torch.tensor([0, 0, 2]), torch.tensor(2), device=device),
+    BatchedLeontief(torch.tensor([0, 0, 2]), torch.tensor(2), device=device),
+    BatchedLeontief(torch.tensor([0, 0, 2]), torch.tensor(2), device=device),
 ]
 env = BatchedEnvironment(market_kwargs,
                          BetaPolicyNetwork,
                          prod_functions,
-                         invest_functions=None,
+                         invest_functions=invest_functions,
                          target='production',
                          production_reg=1,  # 10 is good
                          device=device,

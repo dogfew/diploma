@@ -28,6 +28,7 @@ class BatchedEnvironment:
             gamma=0.99,
             target='finance',
             normalize_rewards=False,
+            percent_prices=False,
             device="cuda",
             invest_functions=None,
     ):
@@ -39,7 +40,10 @@ class BatchedEnvironment:
         self.device = device
         # Market
         self.market = BatchedMarket(
-            **market_kwargs, batch_size=batch_size, device=device
+            **market_kwargs,
+            batch_size=batch_size,
+            n_branches=prod_functions[0].n_branches,
+            device=device
         )
 
         # Firms
@@ -61,10 +65,12 @@ class BatchedEnvironment:
                 firm_class(fun, inv_fun, **firm_kwargs)
                 for fun, inv_fun in zip(prod_functions, invest_functions)
             ]
-
+        if percent_prices:
+            for firm in self.firms:
+                firm.define_prices = firm.define_prices_percent
         self.state_dim = get_state_dim(self.market, self.limit)
         self.action_dim = get_action_dim(self.market, self.limit)
-        self.probs_dim = get_log_probs_dim(self.market, self.limit)
+        self.probs_dim = get_log_probs_dim(self.market)
         self.policies = [
             policy_class(
                 hidden_dim=hidden_dim,
@@ -227,7 +233,7 @@ class BatchedEnvironment:
             percent_to_use = torch.stack([percent_to_use, 1 - percent_to_use], dim=-1)
         else:
             percent_to_use = percent_to_use.reshape(
-                self.batch_size, self.market.n_branches, self.market.n_branches)
+                self.batch_size, self.market.n_branches, 2)
             percent_to_use = torch.cat([percent_to_use, 1 - percent_to_use.sum(dim=-1, keepdim=True)], dim=-1).clamp(
                 1e-6, 1 - 1e-6)
         return (percent_to_buy,
