@@ -1,3 +1,3 @@
 from .critic_network import Critic
-from .centralized_critic_network import CentralizedCritic, CentralizedCritic2
-from .centralized_critic_value import CentralizedCriticV
+from .centralized_q_critic import CentralizedCriticQ, CentralizedCriticQ2
+from .centralized_v_critic import CentralizedCriticV

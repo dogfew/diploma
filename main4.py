@@ -1,9 +1,8 @@
 import torch
 from environment_batched import BatchedMarket, BatchedLeontief, BatchedFirm, BatchedEnvironment
 from models.policy import BetaPolicyNetwork, DeterministicPolicyNetwork, BetaPolicyNetwork2
-from models.critic import CentralizedCritic, CentralizedCritic2
 from models.utils import get_state, get_state_dim, process_actions, get_action_dim
-from trainer import TrainerAC, TrainerSAC
+from trainer import TrainerAC, TrainerSAC, TrainerMASAC
 from utils.plotting import plot_actions, plot_environment, plot_volumes
 
 torch.manual_seed(123)
@@ -11,7 +10,7 @@ torch.backends.cudnn.deterministic = True
 device = 'cuda'
 market_kwargs = dict(start_volumes=10,
                      base_price=50,
-                     start_gains=100,
+                     start_gains=500,
                      deprecation_steps=5,
                      max_price=100,
                      )
@@ -26,23 +25,23 @@ invest_functions = [
 env = BatchedEnvironment(market_kwargs,
                          BetaPolicyNetwork,
                          prod_functions,
-                         invest_functions=invest_functions,
+                         invest_functions=None,
                          target='production',
                          production_reg=0,
                          batch_size=512)
-critic = CentralizedCritic
 trainer = TrainerSAC(env,
-                     q_critic=critic,
-                     batch_size=512,
-                     learning_rates=(3e-4, 3e-4),
-                     buffer_size=8192 * 64,
-                     entropy_reg=0.01,
-                     device=device,
-                     entropy_gamma=0.999,
-                     lr_gamma=0.991,
-                     )
+                    batch_size=512,
+                    learning_rates=(3e-4, 3e-4),
+                    buffer_size=8192 * 128,
+                    entropy_reg=0.025,
+                    device=device,
+                    entropy_gamma=0.995,
+                    max_grad_norm=0.5,
+                    tau=0.995,
+                    lr_gamma=0.991,
+                    )
 # trainer.train_epoch()
-trainer.train(150, episode_length=32, shuffle_order=False)
+trainer.train(250, episode_length=32, shuffle_order=False)
 #
 env.change_batch_size(1)
 env.reset()

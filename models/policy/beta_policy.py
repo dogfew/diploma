@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import Beta, Dirichlet
 from torch.nn.utils import spectral_norm
+from models.utils.initialization import orthogonal_init
 
 class BetaPolicyNetwork(nn.Module):
     def __init__(
@@ -47,24 +48,28 @@ class BetaPolicyNetwork(nn.Module):
         self.init_weights()
         self.i = 0
         # self.apply_spectral_norm(self)
-
-    def apply_spectral_norm(self, module):
-        for child in module.children():
-            if isinstance(child, nn.Linear):
-                nn.utils.spectral_norm(child)
-            elif isinstance(child, nn.Module):
-                self.apply_spectral_norm(child)
+    #
+    # def apply_spectral_norm(self, module):
+    #     for child in module.children():
+    #         if isinstance(child, nn.Linear):
+    #             nn.utils.spectral_norm(child)
+    #         elif isinstance(child, nn.Module):
+    #             self.apply_spectral_norm(child)
 
     def init_weights(self):
         """
         According to paper: https://arxiv.org/pdf/2006.05990
         :return:
         """
+        for layer in self.net:
+            if isinstance(layer, nn.Linear):
+                orthogonal_init(layer, std=1)
         for module in [self.buy, self.sale, self.use, self.prices]:
             for layer in module:
                 if isinstance(layer, nn.Linear):
-                    nn.init.xavier_uniform_(layer.weight)
-                    layer.weight.data /= 100
+                    orthogonal_init(layer, std=0.01)
+                    # nn.init.xavier_uniform_(layer.weight)
+                    # layer.weight.data /= 100
     @property
     def device(self):
         return next(self.parameters()).device

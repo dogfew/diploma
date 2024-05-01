@@ -1,3 +1,5 @@
+import random
+
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -25,10 +27,19 @@ def in_notebook():
 
 
 class BaseTrainer:
-    def __init__(self, environment, device="cuda"):
+    def __init__(self,
+                 environment,
+                 gamma=0.99,
+                 critic_loss=torch.nn.functional.smooth_l1_loss,
+                 entropy_gamma=0.999,
+                 max_grad_norm=0.5,
+                 entropy_reg=0.01,
+                 batch_size=512,
+                 tau=0.95,
+                 device="cuda"):
         self.environment = environment
         self.n_agents = len(self.environment.firms)
-        self.buffer = ReplayBufferOld(50_000)
+        self.buffer = None
         self.policies = self.environment.policies
         self.target_policies = self.environment.target_policies
         self.in_notebook = in_notebook()
@@ -39,6 +50,59 @@ class BaseTrainer:
             for firm_id in range(len(environment.firms))
         }
         self.device = device
+        self.critic_scheduler = None
+        self.critic_loss = critic_loss
+
+        # Plotting
+        self.episode = 0
+        self.df_list = []
+        self.window_size = 10
+
+        # Hyperparams
+        self.gamma = gamma
+        self.tau = tau
+        self.max_grad_norm = max_grad_norm
+        self.entropy_reg = entropy_reg
+        self.entropy_gamma = entropy_gamma
+        self.batch_size = batch_size
+
+    @property
+    def last_lr(self):
+        if getattr(self, 'critic_scheduler') is not None:
+            return self.critic_scheduler.get_last_lr()[0]
+        elif getattr(self, 'critic_scheduler') is not None:
+            return self.q_critic_scheduler.get_last_lr()[0]
+
+
+    def train_epoch(self, max_episode_length, order):
+        raise NotImplementedError
+
+    def train(self, n_epochs, episode_length=100, debug_period=5, shuffle_order=False):
+        """
+        :param n_epochs: Number of Epochs to train model
+        :param episode_length: Number of environment full steps per epoch
+        :param debug_period: how often to update plot
+        :param shuffle_order: whether to shuffle agent's order
+        :return:
+        """
+        pbar = tqdm(range(n_epochs))
+        order = list(range(self.n_agents))
+        for _ in pbar:
+            df = self.train_epoch(max_episode_length=episode_length, order=order)
+            df["episode"] = self.episode
+            self.df_list.append(df)
+            if self.episode % debug_period == 0:
+                self.plot_loss(self.df_list)
+            self.episode += 1
+            if shuffle_order:
+                random.shuffle(order)
+            pbar.set_postfix(
+                {
+                    "LR": self.last_lr,
+                    "Order": str(order),
+                }
+            )
+        self.plot_loss(self.df_list)
 
     @torch.no_grad()
     def plot_loss(self, df_list) -> None:
@@ -64,17 +128,15 @@ class BaseTrainer:
                 group["episode"],
                 group["reward"],
                 label=f"Firm {firm_id}",
-                alpha=0.5,
                 color=color,
-                linestyle="--",
             )
-            window_size = self.window_size if hasattr(self, "window_size") else 1
-            ax[1, 0].plot(
-                group["episode"],
-                group["reward"].rolling(window=window_size).mean(),
-                color=color,
-                linewidth=3,
-            )
+            # window_size = self.window_size if hasattr(self, "window_size") else 1
+            # ax[1, 0].plot(
+            #     group["episode"],
+            #     group["reward"].rolling(window=window_size).mean(),
+            #     color=color,
+            #     linewidth=3,
+            # )
             ax[1, 1].plot(
                 group["episode"],
                 group["entropy_loss"],
@@ -110,57 +172,48 @@ class BaseTrainer:
         plt.show()
 
     @torch.no_grad()
-    def collect_experience(self, order, do_not_skip=False):
+    def collect_experience(self, order, num_steps=50):
         if order is None:
             order = range(len(self.environment.firms))
-        to_add = {
-            "actions": [],
-            "states": [],
-            "log_probs": [],
-            "rewards": [],
-            "next_states": [],
-        }
+
+        batch_size = self.environment.batch_size
+        action_dim = self.environment.action_dim
+        state_dim = self.environment.state_dim
+        n_agents = self.environment.n_agents
+
+        total_steps = num_steps + 1
+        kwargs = dict(device=self.device)
+
+        all_states = torch.empty((total_steps, batch_size, n_agents, state_dim), **kwargs)
+        all_actions = torch.empty((total_steps, batch_size, n_agents, action_dim), **kwargs)
+        all_rewards = torch.empty((total_steps, batch_size, n_agents, 1), **kwargs)
+
+        # First Step
         for firm_id in order:
-            state, actions, log_probs, _, costs = self.environment.step(firm_id)
-            to_add["actions"].append(actions)
-            to_add["states"].append(state)
-            to_add["log_probs"].append(log_probs)
-        if do_not_skip:
-            old_firms_data = [
-                self.environment.firms[firm_id].copy() for firm_id in order
-            ]
-            old_market_data = self.environment.market.copy()
-        for firm_id in order:
-            next_state, _, _, revenue, _ = self.environment.step(firm_id)
-            to_add["next_states"].append(next_state)
-            if isinstance(revenue, int):
-                to_add["rewards"].append(
-                    torch.tensor([revenue - costs], device=self.device)
+            state, actions, log_probs, revenue, costs = self.environment.step(firm_id)
+            all_states[0, :, firm_id, :] = state
+            all_actions[0, :, firm_id, :] = actions
+            all_rewards[0, :, firm_id, :] = revenue - costs
+
+        # Other steps
+        for step in range(1, total_steps):
+            for firm_id in order:
+                state, actions, log_probs, revenue, costs = self.environment.step(
+                    firm_id
                 )
-            else:
-                to_add["rewards"].append(revenue - costs)
-        if do_not_skip:
-            for firm_id, old_data in zip(order, old_firms_data):
-                self.environment.firms[firm_id].set(*old_data)
-            self.environment.market.set(*old_market_data)
-        rewards = torch.stack(to_add["rewards"])
-        # normalize rewards
-        rewards = rewards / self.environment.market.start_gains
-        if isinstance(revenue, int):
-            self.buffer.add(
-                x=torch.stack(to_add["states"]),
-                x_next=torch.stack(to_add["next_states"]),
-                actions=torch.stack(to_add["actions"]),
-                rewards=rewards,
-            )
-        else:
-            self.buffer.add_batch(
-                x=torch.stack(to_add["states"], dim=1),
-                x_next=torch.stack(to_add["next_states"], dim=1),
-                actions=torch.stack(to_add["actions"], dim=1),
-                rewards=rewards.permute(1, 0, 2),
-            )
-        return rewards
+                all_states[step, :, firm_id, :] = state
+                all_actions[step, :, firm_id, :] = actions
+                all_rewards[step, :, firm_id, :] = -costs
+
+                all_rewards[step - 1, :, firm_id, :] += revenue
+
+        self.buffer.add_batch(
+            x=all_states[:-1].flatten(0, 1),
+            x_next=all_states[1:].flatten(0, 1),
+            actions=all_actions[:-1].flatten(0, 1),
+            rewards=all_rewards[:-1].flatten(0, 1),
+        )
+        return all_rewards.permute(0, 2, 1, 3)
 
     def get_actions(self, x, policies, firm_id=None):
         all_actions = []
@@ -179,6 +232,28 @@ class BaseTrainer:
 
     def save(self, filename):
         pickle.dump(self, open(filename, "wb"))
+
+    @torch.no_grad()
+    def _clip_grad_norm(self, model, norm_type=2):
+        try:
+            nn.utils.clip_grad_norm_(
+                model,
+                self.max_grad_norm,
+                norm_type=norm_type,
+                error_if_nonfinite=True,
+            )
+        except RuntimeError:
+            return False
+        return True
+
+    def optimize(self, loss, params, optimizer):
+        optimizer.zero_grad()
+        loss.backward()
+
+        if self._clip_grad_norm(params):
+            optimizer.step()
+        else:
+            print("Got NaN gradients")
 
     @classmethod
     def load(cls, filename):

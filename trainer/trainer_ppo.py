@@ -5,10 +5,12 @@ import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import torch.nn.functional as F
 import pandas as pd
 from copy import deepcopy
 
 from environment_batched.utils import get_state_log
+from models.critic import CentralizedCriticV
 from trainer.base_trainer import BaseTrainer
 from trainer.replay_buffer import ReplayBuffer, ReplayBufferPPO
 from models.utils.preprocessing import get_state_dim, get_action_dim
@@ -22,22 +24,29 @@ class TrainerPPO(BaseTrainer):
     def __init__(
             self,
             environment,
-            critic,
-            gamma=0.99,
-            entropy_reg=0.05,
+            entropy_reg=0.01,
             learning_rates=(3e-4, 3e-4),
             critic_hidden_dim=64,
             buffer_size=8192 * 16,
             batch_size=512,
+            gamma=0.99,
             lr_gamma=0.99,
             entropy_gamma=0.999,
             max_grad_norm=0.5,
             normalize_advantages=True,
             common_optimizer=True,
+            critic_loss=F.smooth_l1_loss,
             use_buffer=False,
             device="cuda",
     ):
-        super().__init__(environment)
+        super().__init__(environment,
+                         entropy_gamma=entropy_gamma,
+                         gamma=gamma,
+                         max_grad_norm=max_grad_norm,
+                         entropy_reg=entropy_reg,
+                         critic_loss=critic_loss,
+                         batch_size=batch_size,
+                         device=device)
         critic_lr, actor_lr = learning_rates
 
         market = self.environment.market
@@ -57,8 +66,9 @@ class TrainerPPO(BaseTrainer):
                 device=device
             )
 
-        # Critic that returns Q-value (1)
-        self.critic = critic(
+        # Critic that returns V-value
+        self.critic_loss = critic_loss
+        self.critic = CentralizedCriticV(
             state_dim=state_dim,
             n_agents=n_firms,
             hidden_dim=critic_hidden_dim
@@ -88,47 +98,14 @@ class TrainerPPO(BaseTrainer):
             for actor_optimizer in self.actor_optimizers
         ]
 
-        # Plotting
-        self.episode = 0
-        self.df_list = []
-        self.window_size = 10
-
         # Hyperparams
         self.common_optimizer = common_optimizer
         self.normalize_advantages = normalize_advantages
         self.cliprange = 0.2
-        self.gamma = gamma
-        self.max_grad_norm = max_grad_norm
-        self.entropy_reg = entropy_reg
-        self.entropy_gamma = entropy_gamma
-        self.batch_size = batch_size
-        self.device = device
 
-    def train(self, n_epochs, episode_length=100, debug_period=5, shuffle_order=False):
-        """
-        :param n_epochs: Number of Epochs to train model
-        :param episode_length: Number of environment full steps per epoch
-        :param debug_period: how often to update plot
-        :param shuffle_order: whether to shuffle agent's order
-        :return:
-        """
-        pbar = tqdm(range(n_epochs))
-        order = list(range(self.n_agents))
-        for _ in pbar:
-            df = self.train_epoch(max_episode_length=episode_length, order=order)
-            df["episode"] = self.episode
-            self.df_list.append(df)
-            if self.episode % debug_period == 0:
-                self.plot_loss(self.df_list)
-            self.episode += 1
-            if shuffle_order:
-                random.shuffle(order)
-            pbar.set_postfix(
-                {
-                    "LR": self.critic_scheduler.get_last_lr()[0],
-                    "Order": str(order),
-                }
-            )
+    @property
+    def last_lr(self):
+        return self.actor_schedulers[0].get_last_lr()[0]
 
     def train_epoch(self, max_episode_length=32, order: list[int] = None):
         self.environment.reset()
@@ -153,8 +130,8 @@ class TrainerPPO(BaseTrainer):
                 v_old = values[:, firm_id]
                 v_hat = value_targets[:, firm_id]
                 critic_loss = torch.maximum(
-                    (v - v_hat).pow(2),
-                    (v.clamp(v_old-self.cliprange, v_old+self.cliprange) - v_hat).pow(2)
+                    self.critic_loss(v, v_hat, reduction='none'),
+                    self.critic_loss(v.clamp(v_old - self.cliprange, v_old + self.cliprange), v_hat, reduction='none')
                 ).mean()
 
                 # Compute Actor Loss
@@ -173,8 +150,8 @@ class TrainerPPO(BaseTrainer):
                     dim=-1)
                 ratios = torch.exp(log_probs_new - log_probs_old[:, firm_id, :])
                 actor_loss = - torch.minimum(advantages * ratios,
-                                             advantages * ratios.clamp(1-self.cliprange,
-                                                                       1+self.cliprange)).mean()
+                                             advantages * ratios.clamp(1 - self.cliprange,
+                                                                       1 + self.cliprange)).mean()
                 entropy_loss = - log_probs_new.mean()
                 if self.common_optimizer:
                     self.optimize(
@@ -210,28 +187,6 @@ class TrainerPPO(BaseTrainer):
         return df_out
 
     @torch.no_grad()
-    def _clip_grad_norm(self, model, norm_type=2):
-        try:
-            nn.utils.clip_grad_norm_(
-                model,
-                self.max_grad_norm,
-                norm_type=norm_type,
-                error_if_nonfinite=True,
-            )
-        except RuntimeError:
-            return False
-        return True
-
-    def optimize(self, loss, params, optimizer):
-        optimizer.zero_grad()
-        loss.backward()
-
-        if self._clip_grad_norm(params):
-            optimizer.step()
-        else:
-            print("Got NaN gradients")
-
-    @torch.no_grad()
     def get_trajectory(self, order=None, num_steps=50):
         self.environment.reset()
         if order is None:
@@ -248,7 +203,7 @@ class TrainerPPO(BaseTrainer):
 
         all_advantages = torch.empty((total_steps, batch_size, n_agents, 1), **kwargs)
         all_actions = torch.empty((total_steps, batch_size, n_agents, action_dim), **kwargs)
-        all_states = torch.empty((total_steps+1, batch_size, n_agents, state_dim), **kwargs)
+        all_states = torch.empty((total_steps + 1, batch_size, n_agents, state_dim), **kwargs)
         all_rewards = torch.empty((total_steps, batch_size, n_agents, 1), **kwargs)
         all_log_probs = torch.empty((total_steps, batch_size, n_agents, probs_dim), **kwargs)
         all_values = torch.empty((total_steps + 1, batch_size, n_agents), **kwargs)

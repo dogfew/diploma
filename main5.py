@@ -1,15 +1,15 @@
 import torch
 from environment_batched import BatchedMarket, BatchedLeontief, BatchedFirm, BatchedEnvironment
 from models.policy import BetaPolicyNetwork, DeterministicPolicyNetwork, BetaPolicyNetwork2
-from models.critic import CentralizedCritic, CentralizedCriticV
 from models.utils import get_state, get_state_dim, process_actions, get_action_dim
 from trainer import TrainerPPO, TrainerSAC
 from utils.plotting import plot_actions, plot_environment, plot_volumes
+import torch.nn.functional as F
 
 torch.manual_seed(123)
 torch.backends.cudnn.deterministic = True
 device = 'cuda'
-market_kwargs = dict(start_volumes=10,
+market_kwargs = dict(start_volumes=2,
                      base_price=50,
                      start_gains=500,
                      deprecation_steps=5,
@@ -30,9 +30,7 @@ env = BatchedEnvironment(market_kwargs,
                          production_reg=1,  # 10 is good
                          device=device,
                          batch_size=512)
-critic = CentralizedCriticV
 trainer = TrainerPPO(env,
-                     critic=critic,
                      learning_rates=(3e-3, 3e-4),
                      batch_size=512,
                      entropy_reg=0.01,
@@ -43,7 +41,7 @@ trainer = TrainerPPO(env,
                      common_optimizer=True
                      )
 # trainer.train_epoch(1)
-trainer.train(100, episode_length=32, debug_period=10)
+trainer.train(500, episode_length=32, debug_period=10)
 env.change_batch_size(1)
 env.reset()
 n_periods = 64
