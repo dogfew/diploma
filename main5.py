@@ -31,6 +31,7 @@ env = BatchedEnvironment(market_kwargs,
                          prod_functions,
                          invest_functions=invest_functions,
                          target='production',
+                         percent_prices=True,
                          production_reg=1,  # 10 is good
                          device=device,
                          batch_size=512)
@@ -45,7 +46,7 @@ trainer = TrainerPPO(env,
                      common_optimizer=True
                      )
 # trainer.train_epoch(1)
-trainer.train(500, episode_length=32, debug_period=10)
+trainer.train(500, episode_length=32, debug_period=10, shuffle_order=True)
 env.change_batch_size(1)
 env.reset()
 n_periods = 64
