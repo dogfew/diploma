@@ -147,7 +147,7 @@ class TrainerSAC(BaseTrainer):
                 # # Normalize rewards
                 # rewards = (rewards - rewards.mean(dim=0, keepdims=True)) / (rewards.std(dim=0, keepdims=True) + 1e-6)
 
-                # Compute Q-Target
+                # Compute Critic Target
                 with torch.no_grad():
                     actions_next, log_probs_next = self.get_actions(
                         x_next, policies, firm_id=firm_id

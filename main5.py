@@ -13,8 +13,7 @@ market_kwargs = dict(start_volumes=10,
                      base_price=50,
                      start_gains=500,
                      deprecation_steps=5,
-                     max_price=100,
-                     )
+                     max_price=100)
 prod_functions = [
     BatchedLeontief(torch.tensor([1, 0]), torch.tensor([0, 2]), device=device),
     BatchedLeontief(torch.tensor([0, 1]), torch.tensor([2, 0]), device=device),
@@ -26,7 +25,7 @@ invest_functions = [
 env = BatchedEnvironment(market_kwargs,
                          BetaPolicyNetwork,
                          prod_functions,
-                         invest_functions=invest_functions,
+                         invest_functions=None,
                          target='production',
                          production_reg=1,  # 10 is good
                          device=device,
@@ -36,7 +35,7 @@ trainer = TrainerPPO(env,
                      critic=critic,
                      learning_rates=(3e-3, 3e-4),
                      batch_size=512,
-                     entropy_reg=0.1,
+                     entropy_reg=0.01,
                      buffer_size=8192 * 64,
                      device=device,
                      entropy_gamma=0.999,
@@ -44,7 +43,7 @@ trainer = TrainerPPO(env,
                      common_optimizer=True
                      )
 # trainer.train_epoch(1)
-trainer.train(300, episode_length=32, debug_period=10)
+trainer.train(100, episode_length=32, debug_period=10)
 env.change_batch_size(1)
 env.reset()
 n_periods = 64

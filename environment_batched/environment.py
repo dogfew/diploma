@@ -25,12 +25,16 @@ class BatchedEnvironment:
             batch_size=16,
             hidden_dim=64,
             production_reg=0.1,
+            gamma=0.99,
             target='finance',
+            normalize_rewards=False,
             device="cuda",
             invest_functions=None,
     ):
         self.mode = target
+        self.normalize_rewards = normalize_rewards
         self.batch_size = batch_size
+        self.gamma = gamma
         self.limit = invest_functions is not None
         self.device = device
         # Market
@@ -106,7 +110,6 @@ class BatchedEnvironment:
             for firm_id in range(self.n_agents)
         }
 
-
     @property
     def n_agents(self):
         return self.market.max_id
@@ -132,7 +135,7 @@ class BatchedEnvironment:
 
     def update_moments(self, vector, name, firm_id):
         batch_mean = vector.mean(dim=0)
-        batch_var = vector.var(dim=0)
+        batch_var = torch.nan_to_num(vector.var(dim=0, correction=vector.dim() > 1), 1)
         batch_count = vector.shape[0] if vector.dim() > 1 else 1
         mean, var, count = map(lambda x: self.running_vars[firm_id].get(f'{x}_{name}'), ['mean', 'var', 'count'])
         delta = batch_mean - mean
@@ -155,7 +158,6 @@ class BatchedEnvironment:
         input_prices  = log10(p)
         input_volumes = log(v + 1)
         """
-        mean, var = 0, torch.tensor(1.)
         market = self.market
         firm = self.firms[firm_id]
 
@@ -163,17 +165,18 @@ class BatchedEnvironment:
         price_scaling = (market.max_price + market.min_price) / 2
         price_state = (market.price_matrix.flatten(start_dim=1) - price_scaling) / price_scaling
 
-        # Get Volume State. Normalize volumes using running stats.
+        # Get Volume State.
         volume_state = (market.volume_matrix.flatten(start_dim=1).float() + 0.5).log10()
+
+        # Get Reserve State.
+        reserves_state = (firm.reserves.flatten(start_dim=1).float() + 0.5).log10()
+
+        # Optional Normalize
         if normalize:
             mean, var, count = self.update_moments(volume_state, 'volume', firm_id)
-        volume_state = (volume_state - mean) / var
-
-        # Get Reserve State. Normalize reserves using running stats.
-        reserves_state = (firm.reserves.flatten(start_dim=1).float() + 0.5).log10()
-        if normalize:
+            volume_state = (volume_state - mean) / var
             mean, var, count = self.update_moments(reserves_state, 'reserve', firm_id)
-        reserves_state = (reserves_state - mean) / var
+            reserves_state = (reserves_state - mean) / var
         # Normalize finance to [-1, 1]
         finance_state = firm.financial_resources + market.gains[:, firm.id, None]
         finance_state = (finance_state - market.max_price / market.n_firms) / market.max_price
@@ -210,6 +213,9 @@ class BatchedEnvironment:
         revenue, costs = firm.step(*processed_actions)
         return state, actions_concatenated, log_probs_concatenated, revenue, costs
 
+
+
+
     @torch.no_grad()
     def restore_actions(self, actions):
         if actions.dim() == 1:
@@ -222,7 +228,8 @@ class BatchedEnvironment:
         else:
             percent_to_use = percent_to_use.reshape(
                 self.batch_size, self.market.n_branches, self.market.n_branches)
-            percent_to_use = torch.cat([percent_to_use, 1 - percent_to_use.sum(dim=-1, keepdim=True)], dim=-1).clamp(1e-6, 1-1e-6)
+            percent_to_use = torch.cat([percent_to_use, 1 - percent_to_use.sum(dim=-1, keepdim=True)], dim=-1).clamp(
+                1e-6, 1 - 1e-6)
         return (percent_to_buy,
                 percent_to_sale,
                 percent_to_use,
@@ -261,3 +268,13 @@ class BatchedEnvironment:
 
         self.state_history.append(state_info)
         self.actions_history[firm_id].append(policy_info)
+
+    def process_rewards(self, firm_id, revenue, costs, cliprange=5):
+
+        self.running_vars[firm_id]['cum_reward'] *= self.gamma
+        self.running_vars[firm_id]['cum_reward'] += (revenue - costs).squeeze()
+        var_rewards = self.update_moments(self.running_vars[firm_id]['cum_reward'], 'reward', firm_id)[1]
+        sqrt_reward = var_rewards.sqrt().unsqueeze(dim=-1)
+        revenue = torch.clip(revenue / sqrt_reward, -5, 5)
+        costs = torch.clip(costs / sqrt_reward, -5, 5)
+        return revenue, costs

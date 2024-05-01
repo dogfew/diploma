@@ -294,8 +294,6 @@ class BatchedLimitProductionFirm(BatchedLimitFirm):
         percent_to_use_prod, percent_to_use_invest = torch.split(
             percent_to_use, [self.n_branches, self.n_branches], dim=1
         )
-        # print(percent_to_use_invest.shape)
-        # exit()
         input_prod = (self.reserves * percent_to_use_prod).round().type(torch.int64)
         input_invest = (self.reserves * percent_to_use_invest).round().type(torch.int64)
         self.receive_revenue()
@@ -306,7 +304,7 @@ class BatchedLimitProductionFirm(BatchedLimitFirm):
         self.sell(percent_to_sale)
         revenue = new_reserves.sum(dim=1, keepdims=True)
         revenue -= used_reserves_produce.sum(dim=1, keepdims=True)
-        costs = torch.zeros_like(revenue)
+        costs = torch.zeros_like(revenue).float()
         return costs, -(revenue + 0.5).log()
 
 
@@ -338,5 +336,5 @@ class BatchedProductionFirm(BatchedFirm):
         self.sell(percent_to_sale)
         revenue = new_reserves.sum(dim=1, keepdims=True)
         revenue -= used_reserves_produce.sum(dim=1, keepdims=True)
-        costs = torch.zeros_like(revenue)
+        costs = torch.zeros_like(revenue).float()
         return costs, -(revenue + 0.5).log()

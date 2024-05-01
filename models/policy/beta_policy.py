@@ -3,7 +3,6 @@ import torch.nn as nn
 from torch.distributions import Beta, Dirichlet
 from torch.nn.utils import spectral_norm
 
-
 class BetaPolicyNetwork(nn.Module):
     def __init__(
         self,
