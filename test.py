@@ -3,7 +3,7 @@ from environment_batched import BatchedMarket, BatchedLeontief, BatchedFirm, Bat
 from models.policy import BetaPolicyNetwork, DeterministicPolicyNetwork, BetaPolicyNetwork2
 from models.utils import get_state, get_state_dim, process_actions, get_action_dim
 from trainer import TrainerPPO, TrainerSAC
-from utils import plot_environment_batch, plot_volumes_batch
+from utils import plot_environment_batch, plot_volumes_batch, plot_actions_batch
 from utils.plotting import plot_actions, plot_environment, plot_volumes
 import torch.nn.functional as F
 
@@ -57,11 +57,12 @@ env = BatchedEnvironment(market_kwargs,
                         )
 trainer = TrainerPPO(env, **trainer_kwargs)
 # trainer.train(500, 32, shuffle_order=True)
-env.change_batch_size(512)
+env.change_batch_size(32)
 env.reset()
 n_periods = 256
 for i in range(n_periods):
     env.step_and_record_batch(i % env.market.n_firms)
 
-plot_environment_batch(env_history=env.state_history)
-plot_volumes_batch(env_history=env.state_history)
+plot_environment_batch(env.state_history, confidence=0.9)
+plot_volumes_batch(env.state_history)
+#plot_actions_batch(env.actions_history[0])

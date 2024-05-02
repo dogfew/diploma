@@ -2,6 +2,7 @@ import random
 
 import torch
 import torch.nn as nn
+from matplotlib.patheffects import withStroke
 from tqdm import tqdm
 import pickle
 import pandas as pd
@@ -116,19 +117,24 @@ class BaseTrainer:
                 group["episode"],
                 group["actor_loss"],
                 label=f"Firm {firm_id}",
+                path_effects=[withStroke(linewidth=2, foreground='black')],
+
                 color=color,
             )
             ax[0, 1].plot(
                 group["episode"],
                 group["critic_loss"],
                 label=f"Firm {firm_id}",
+                path_effects=[withStroke(linewidth=2, foreground='black')],
+
                 color=color,
             )
             ax[1, 0].plot(
                 group["episode"],
                 group["reward"],
                 label=f"Firm {firm_id}",
-                color=color,
+                path_effects=[withStroke(linewidth=2, foreground='black')],
+            color=color,
             )
             # window_size = self.window_size if hasattr(self, "window_size") else 1
             # ax[1, 0].plot(
@@ -141,6 +147,7 @@ class BaseTrainer:
                 group["episode"],
                 group["entropy_loss"],
                 label=f"Firm {firm_id}",
+                path_effects=[withStroke(linewidth=2, foreground='black')],
                 color=color,
             )
 
