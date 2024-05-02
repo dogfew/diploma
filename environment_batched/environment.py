@@ -219,9 +219,6 @@ class BatchedEnvironment:
         revenue, costs = firm.step(*processed_actions)
         return state, actions_concatenated, log_probs_concatenated, revenue, costs
 
-
-
-
     @torch.no_grad()
     def restore_actions(self, actions):
         if actions.dim() == 1:
@@ -244,27 +241,56 @@ class BatchedEnvironment:
 
     @torch.no_grad()
     def step_and_record(self, firm_id):
-        state, actions_concatenated, log_probs_concatenated, revenue, costs = map(
-            lambda x: x[0], self.step(firm_id)
-        )
+        state, actions_concatenated, log_probs_concatenated, revenue, costs = self.step(firm_id)
         state_info = {
-            "price_matrix": self.market.price_matrix[0].cpu().numpy(),
-            "volume_matrix": self.market.volume_matrix[0].cpu().numpy(),
-            "finance": self.market.gains[0].cpu().numpy()
-                       + np.array([firm.financial_resources[0].item() for firm in self.firms]),
+            "price_matrix": self.market.price_matrix.cpu().numpy(),
+            "volume_matrix": self.market.volume_matrix.cpu().numpy(),
+            "finance": self.market.gains.cpu().numpy()
+                       + np.array([firm.financial_resources for firm in self.firms]),
             "reserves": torch.stack([firm.reserves[0] for firm in self.firms])
             .cpu()
             .numpy(),
         }
         if self.limit:
             state_info["limits"] = (
-                torch.tensor([firm.limit[0] for firm in self.firms]).cpu().numpy()
+                torch.tensor([firm.limit for firm in self.firms]).cpu().numpy()
             )
         percent_to_buy, percent_to_sale, percent_to_use, prices = torch.split(
             actions_concatenated.cpu(), self.actions_split_sizes
         )
         policy_info = {
             "percent_to_buy": percent_to_buy[:-1]
+            .unflatten(-1, self.market.price_matrix.shape[1:])
+            .numpy(),
+            "percent_to_sale": percent_to_sale.numpy(),
+            "percent_to_use": percent_to_use.numpy(),
+            "prices": prices.numpy(),
+        }
+
+        self.state_history.append(state_info)
+        self.actions_history[firm_id].append(policy_info)
+
+    @torch.no_grad()
+    def step_and_record_batch(self, firm_id):
+        state, actions_concatenated, log_probs_concatenated, revenue, costs = self.step(firm_id)
+        state_info = {
+            "price_matrix": self.market.price_matrix.cpu().numpy(),
+            "volume_matrix": self.market.volume_matrix.cpu().numpy(),
+            "finance": self.market.gains.cpu().numpy()
+                       + torch.stack([firm.financial_resources for firm in self.firms]).permute(1, 0, 2).squeeze(-1).cpu().numpy(),
+            "reserves": torch.stack([firm.reserves for firm in self.firms])
+            .cpu()
+            .numpy(),
+        }
+        if self.limit:
+            state_info["limits"] = (
+                torch.stack([firm.limit for firm in self.firms]).cpu().numpy()
+            )
+        percent_to_buy, percent_to_sale, percent_to_use, prices = torch.split(
+            actions_concatenated.cpu(), self.actions_split_sizes, dim=1
+        )
+        policy_info = {
+            "percent_to_buy": percent_to_buy[:, :-1]
             .unflatten(-1, self.market.price_matrix.shape[1:])
             .numpy(),
             "percent_to_sale": percent_to_sale.numpy(),
