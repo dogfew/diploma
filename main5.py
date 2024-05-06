@@ -45,13 +45,13 @@ trainer = TrainerPPO(env,
                      lr_gamma=0.991,
                      )
 # trainer.train_epoch(1)
-trainer.train(96, episode_length=32, debug_period=10, shuffle_order=True)
+# trainer.train(1, episode_length=32, debug_period=10, shuffle_order=True)
 env.change_batch_size(32)
 env.reset()
 n_periods = 96
 for i in range(n_periods):
     env.step_and_record_batch(i % env.market.n_firms)
-plot_loss_batch(trainer.df_list)
+# plot_loss_batch(trainer.df_list)
 plot_environment_batch(env.state_history)
 plot_volumes_batch(env.state_history)
 plot_actions_batch(env.actions_history[0], 'policy1')
