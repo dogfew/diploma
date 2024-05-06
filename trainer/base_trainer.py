@@ -78,7 +78,13 @@ class BaseTrainer:
     def train_epoch(self, max_episode_length, order):
         raise NotImplementedError
 
-    def train(self, n_epochs, episode_length=100, debug_period=5, shuffle_order=False):
+    def train(self,
+              n_epochs,
+              episode_length=100,
+              debug_period=5,
+              shuffle_order=False,
+              plot_latex=True,
+              num=0):
         """
         :param n_epochs: Number of Epochs to train model
         :param episode_length: Number of environment full steps per epoch

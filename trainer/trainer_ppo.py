@@ -33,6 +33,7 @@ class TrainerPPO(BaseTrainer):
             lr_gamma=0.99,
             entropy_gamma=0.999,
             max_grad_norm=0.5,
+            shared_weights=True,
             normalize_advantages=True,
             common_optimizer=True,
             critic_loss=F.smooth_l1_loss,
@@ -68,30 +69,54 @@ class TrainerPPO(BaseTrainer):
 
         # Critic that returns V-value
         self.critic_loss = critic_loss
-        self.critic = CentralizedCriticV(
-            state_dim=state_dim,
-            n_agents=n_firms,
-            hidden_dim=critic_hidden_dim
-        ).to(device)
-
-        self.critic_optimizer = torch.optim.Adam(
-            self.critic.parameters(), lr=critic_lr, weight_decay=0
-        )
-        self.critic_scheduler = torch.optim.lr_scheduler.ExponentialLR(
-            self.critic_optimizer, gamma=lr_gamma
-        )
+        self.shared_weights = shared_weights
+        if self.shared_weights:
+            self.critic = CentralizedCriticV(
+                state_dim=state_dim,
+                n_agents=n_firms,
+                hidden_dim=critic_hidden_dim
+            ).to(device)
+            self.critic_optimizer = torch.optim.Adam(
+                self.critic.parameters(), lr=critic_lr, weight_decay=0
+            )
+            self.critic_scheduler = torch.optim.lr_scheduler.ExponentialLR(
+                self.critic_optimizer, gamma=lr_gamma
+            )
+        else:
+            self.critics = [
+                CentralizedCriticV(
+                    state_dim=state_dim,
+                    n_agents=n_firms,
+                    hidden_dim=critic_hidden_dim
+                ).to(device) for _ in self.policies
+            ]
+            self.critic_optimizers = [
+                torch.optim.Adam(
+                    critic.parameters(), lr=critic_lr, weight_decay=0
+                ) for critic in self.critics
+            ]
 
         self.policies = self.environment.policies
         for policy in self.environment.policies:
             policy.to(device)
 
         # Actors
+        if shared_weights:
+            actor_parameters = [
+                list(policy.parameters()) + list(self.critic.parameters()) for policy in self.policies
+            ]
+        else:
+            actor_parameters = [
+                list(policy.parameters()) + list(critic.parameters()) for critic, policy in zip(self.critics,
+                                                                                                self.policies)
+            ]
         self.actor_optimizers = [
             torch.optim.Adam(
-                list(policy.parameters()) + list(self.critic.parameters())
-                if common_optimizer else policy.parameters(),
+                params
+                # if common_optimizer else policy.parameters()
+                ,
                 lr=actor_lr, weight_decay=0)
-            for policy in self.policies
+            for params in actor_parameters
         ]
         self.actor_schedulers = [
             torch.optim.lr_scheduler.ExponentialLR(actor_optimizer, gamma=lr_gamma)
@@ -102,6 +127,8 @@ class TrainerPPO(BaseTrainer):
         self.common_optimizer = common_optimizer
         self.normalize_advantages = normalize_advantages
         self.cliprange = 0.2
+        self.lambda_ = 0.95
+
 
     @property
     def last_lr(self):
@@ -114,7 +141,6 @@ class TrainerPPO(BaseTrainer):
         policies = self.policies
 
         for idx in range(max_episode_length):
-            rewards_debug = rewards_lst[idx]
             if self.use_buffer:
                 # Sample from buffer
                 sampled = self.buffer.sample(self.batch_size)
@@ -126,7 +152,13 @@ class TrainerPPO(BaseTrainer):
             x, x_next, actions, values, all_advantages, value_targets, log_probs_old = sampled
             for firm_id in range(self.n_agents):
                 # Compute Critic Loss
-                v = self.critic(x).unsqueeze(-1)[:, firm_id]
+                if self.shared_weights:
+                    critic = self.critic
+                    critic_optimizer = self.critic_optimizer
+                else:
+                    critic = self.critics[firm_id]
+                    critic_optimizer = self.critic_optimizers[firm_id]
+                v = critic(x).unsqueeze(-1)[:, firm_id]
                 v_old = values[:, firm_id]
                 v_hat = value_targets[:, firm_id]
                 critic_loss = torch.maximum(
@@ -156,13 +188,13 @@ class TrainerPPO(BaseTrainer):
                 if self.common_optimizer:
                     self.optimize(
                         loss=critic_loss + actor_loss + entropy_loss * self.entropy_reg,
-                        params=list(policies[firm_id].parameters()) + list(self.critic.parameters()),
+                        params=list(policies[firm_id].parameters()) + list(critic.parameters()),
                         optimizer=self.actor_optimizers[firm_id],
                     )
                 else:
                     self.optimize(critic_loss,
-                                  self.critic.parameters(),
-                                  self.critic_optimizer)
+                                  critic.parameters(),
+                                  critic_optimizer)
                     self.optimize(actor_loss + entropy_loss * self.entropy_reg,
                                   policies[firm_id].parameters(),
                                   self.actor_optimizers[firm_id])
@@ -185,6 +217,13 @@ class TrainerPPO(BaseTrainer):
         df_out = pd.DataFrame(history).groupby("firm_id").mean()
         df_out['reward'] = rewards_lst.mean(dim=(0, 2)).flatten().cpu().numpy()
         return df_out
+
+    def get_critic_output(self, state):
+        if self.shared_weights:
+            return self.critic(state)
+        else:
+            critics_out = torch.stack([self.critics[i](state)[:, i] for i in range(len(self.critics))])
+            return critics_out.T
 
     @torch.no_grad()
     def get_trajectory(self, order=None, num_steps=50):
@@ -215,7 +254,7 @@ class TrainerPPO(BaseTrainer):
             all_log_probs[0, :, firm_id, :] = log_probs
             all_rewards[0, :, firm_id, :] = revenue - costs
             all_actions[0, :, firm_id] = actions
-        all_values[0] = self.critic(all_states[0])
+        all_values[0] = self.get_critic_output(all_states[0])
         # Other steps
         for step in range(1, total_steps):
             for firm_id in order:
@@ -227,8 +266,7 @@ class TrainerPPO(BaseTrainer):
                 all_rewards[step, :, firm_id, :] = -costs
                 all_actions[step, :, firm_id] = actions
                 all_rewards[step - 1, :, firm_id, :] += revenue
-
-            all_values[step] = self.critic(all_states[step])
+            all_values[step] = self.get_critic_output(all_states[step])
 
         for firm_id in order:
             state = self.environment.get_state(firm_id)
@@ -237,12 +275,12 @@ class TrainerPPO(BaseTrainer):
             all_states[-1, :, firm_id, :] = state
         if self.environment.mode == 'finance':
             all_rewards /= self.environment.market.start_gains
-        all_values[-1] = self.critic(all_states[-1])
+        all_values[0] = self.get_critic_output(all_states[-1])
         all_values = all_values.unsqueeze(-1)
         rewards_to_show = all_rewards.clone()
         # Compute GAE
         gae = 0
-        lambda_ = 0.95
+        lambda_ = self.lambda_
         for t in reversed(range(total_steps)):
             next_values = all_values[t + 1]
             current_rewards = all_rewards[t]

@@ -3,8 +3,7 @@ from environment_batched import BatchedMarket, BatchedLeontief, BatchedFirm, Bat
 from models.policy import BetaPolicyNetwork, DeterministicPolicyNetwork, BetaPolicyNetwork2
 from models.utils import get_state, get_state_dim, process_actions, get_action_dim
 from trainer import TrainerPPO, TrainerSAC
-from utils.plotting import plot_actions, plot_environment, plot_volumes
-import torch.nn.functional as F
+from utils.plotting_tikz import plot_environment_batch, plot_volumes_batch, plot_actions_batch, plot_loss_batch
 
 torch.manual_seed(123)
 torch.backends.cudnn.deterministic = True
@@ -30,9 +29,9 @@ env = BatchedEnvironment(market_kwargs,
                          BetaPolicyNetwork,
                          prod_functions,
                          invest_functions=invest_functions,
-                         target='production',
-                         percent_prices=True,
-                         production_reg=1,  # 10 is good
+                         target='finance',
+                         percent_prices=False,
+                         production_reg=0,  # 10 is good
                          device=device,
                          batch_size=512)
 trainer = TrainerPPO(env,
@@ -41,19 +40,20 @@ trainer = TrainerPPO(env,
                      entropy_reg=0.01,
                      buffer_size=8192 * 64,
                      device=device,
+                     shared_weights=False,
                      entropy_gamma=0.999,
                      lr_gamma=0.991,
-                     common_optimizer=True
                      )
 # trainer.train_epoch(1)
-trainer.train(500, episode_length=32, debug_period=10, shuffle_order=True)
-env.change_batch_size(1)
+trainer.train(96, episode_length=32, debug_period=10, shuffle_order=True)
+env.change_batch_size(32)
 env.reset()
-n_periods = 64
+n_periods = 96
 for i in range(n_periods):
-    env.step_and_record(i % env.market.n_firms)
-plot_environment(env.state_history)
-plot_volumes(env.state_history)
-plot_actions(env.actions_history[0], 'Политика Фирма 1 (1)')
-plot_actions(env.actions_history[1], 'Политика Фирма 2 (2)')
+    env.step_and_record_batch(i % env.market.n_firms)
+plot_loss_batch(trainer.df_list)
+plot_environment_batch(env.state_history)
+plot_volumes_batch(env.state_history)
+plot_actions_batch(env.actions_history[0], 'policy1')
+plot_actions_batch(env.actions_history[1], 'policy2')
 #

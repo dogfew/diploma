@@ -3,10 +3,20 @@ import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patheffects import withStroke
 from scipy.stats import t
 from scipy.ndimage import uniform_filter1d
 
+sample = 32
+colors = np.vstack((
+plt.get_cmap("YlOrBr", sample)(np.linspace(0, 1, sample))[::-1],
+plt.get_cmap("YlGn", sample)(np.linspace(0, 1, sample)),
+)
+)#[::-1]
+
+colormap = LinearSegmentedColormap.from_list("green_to_red", colors)
+colormap = 'RdYlGn'
 
 def plot_actions_batch(agent_actions_history, title='', mode='mean'):
     data = agent_actions_history
@@ -40,7 +50,7 @@ def plot_actions_batch(agent_actions_history, title='', mode='mean'):
 
     combined_data = np.hstack(combined_data).T
     plt.figure(figsize=(16, 8))
-    sns.heatmap(combined_data, annot=False, cmap='RdYlGn', cbar=True, yticklabels=yticklabels)
+    sns.heatmap(combined_data, annot=False, cmap=colormap, cbar=True, yticklabels=yticklabels)
     plt.hlines(np.arange(1, len(yticklabels)), *plt.xlim(), colors='black', linestyles='solid', linewidth=1)
 
     plt.title(title)
@@ -52,7 +62,7 @@ def plot_actions_batch(agent_actions_history, title='', mode='mean'):
     plt.show()
 
 
-def plot_volumes_batch(env_history, confidence=0.9, alpha=0.5, window_size=5):
+def plot_volumes_batch(env_history, confidence=0.8, alpha=0.5, window_size=5):
     volumes = np.stack([x['volume_matrix'] for x in env_history])  # .T
     reserves = np.stack([x['reserves'] for x in env_history]).transpose(0, 2, 1, 3)
     total = (volumes + reserves).sum(axis=2)
@@ -82,7 +92,7 @@ def plot_volumes_batch(env_history, confidence=0.9, alpha=0.5, window_size=5):
     plt.show()
 
 
-def plot_environment_batch(env_history, confidence=0.9, alpha=0.5, window_size=5):
+def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5):
     data = env_history
     num_firms, n_branches = data[0]['price_matrix'].shape[1:]
 
@@ -249,4 +259,22 @@ def plot_actions(agent_actions_history, title=''):
     plt.yticks(rotation=0)
     plt.gca().set_yticklabels(plt.gca().get_yticklabels(), ha='left')
     plt.gca().tick_params(axis='y', which='major', pad=120)
+    plt.show()
+
+
+if __name__ == '__main__':
+    gradient = np.linspace(0, 1, 256)
+    gradient = np.vstack((gradient, gradient))
+
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(20, 2))
+
+    axes[0].imshow(gradient, aspect='auto', cmap=colormap)
+    axes[0].set_title('Custom Green-Yellow-Red')
+    axes[0].axis('off')
+
+    axes[1].imshow(gradient, aspect='auto', cmap='RdYlGn')
+    axes[1].set_title('Standard RdYlGn')
+    axes[1].axis('off')
+
+    plt.tight_layout()
     plt.show()

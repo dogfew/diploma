@@ -246,7 +246,7 @@ class BatchedEnvironment:
             "price_matrix": self.market.price_matrix.cpu().numpy(),
             "volume_matrix": self.market.volume_matrix.cpu().numpy(),
             "finance": self.market.gains.cpu().numpy()
-                       + np.array([firm.financial_resources for firm in self.firms]),
+                       + np.array([firm.financial_resources.cpu() for firm in self.firms]),
             "reserves": torch.stack([firm.reserves[0] for firm in self.firms])
             .cpu()
             .numpy(),
@@ -256,7 +256,7 @@ class BatchedEnvironment:
                 torch.tensor([firm.limit for firm in self.firms]).cpu().numpy()
             )
         percent_to_buy, percent_to_sale, percent_to_use, prices = torch.split(
-            actions_concatenated.cpu(), self.actions_split_sizes
+            actions_concatenated.cpu(), self.actions_split_sizes, dim=1
         )
         policy_info = {
             "percent_to_buy": percent_to_buy[:-1]

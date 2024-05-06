@@ -101,11 +101,6 @@ class BatchedFirm:
         new_prices = (prices * self.market.max_price).type(self.market.dtype)
         self.market.process_prices(self.id, new_prices)
         return
-        # new_prices = price_change_function(
-        #     self.market.price_matrix[:, self.id], prices
-        # ).type(self.market.dtype)
-        # self.market.process_prices(self.id, new_prices=new_prices)
-        # return new_prices
 
     def define_prices_percent(self, percent):
         new_prices = price_change_function(
