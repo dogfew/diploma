@@ -275,7 +275,7 @@ class TrainerPPO(BaseTrainer):
             all_states[-1, :, firm_id, :] = state
         if self.environment.mode == 'finance':
             all_rewards /= self.environment.market.start_gains
-        all_values[0] = self.get_critic_output(all_states[-1])
+        all_values[-1] = self.get_critic_output(all_states[-1])
         all_values = all_values.unsqueeze(-1)
         rewards_to_show = all_rewards.clone()
         # Compute GAE

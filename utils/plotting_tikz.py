@@ -214,7 +214,7 @@ def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5
         )
     ax[0].set_title('Финансы')
     ax[0].set_xlabel('Период')
-    ax[0].set_ylabel('Финансы')
+    ax[0].set_ylabel('')
     # ax[0].legend()
     ax[0].grid(True)
     if ncols == 2:
@@ -237,7 +237,7 @@ def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5
 
         ax[1].set_title('Лимиты')
         ax[1].set_xlabel('Период')
-        ax[1].set_ylabel('Лимиты')
+        ax[1].set_ylabel('')
         # ax[1].legend()
         ax[1].grid(True)
     plt.savefig(f'{PICS_DIRECTORY}/timedata2_{num}.pgf')
