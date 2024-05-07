@@ -173,7 +173,10 @@ def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5
     fig, ax = plt.subplots(1, ncols, figsize=(6 * ncols, 5))
     ax = np.atleast_1d(ax)
     for i in range(finances_mean.shape[1]):
-        data_ma = uniform_filter1d(finances_mean[:, i], size=window_size, axis=0, mode='nearest')
+        data_ma = uniform_filter1d(finances_mean[:, i],
+                                   size=window_size,
+                                   axis=0,
+                                   mode='mirror')
 
         ax[0].plot(periods,
                    data_ma,

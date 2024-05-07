@@ -3,7 +3,8 @@ from environment_batched import BatchedMarket, BatchedLeontief, BatchedFirm, Bat
 from models.policy import BetaPolicyNetwork, DeterministicPolicyNetwork, BetaPolicyNetwork2
 from models.utils import get_state, get_state_dim, process_actions, get_action_dim
 from trainer import TrainerPPO, TrainerSAC
-from utils.plotting_tikz import plot_environment_batch, plot_volumes_batch, plot_actions_batch, plot_loss_batch
+from utils.plotting_mean import plot_environment_batch, plot_volumes_batch, plot_actions_batch
+# from utils.plotting_tikz import plot_environment_batch, plot_volumes_batch, plot_actions_batch, plot_loss_batch
 
 torch.manual_seed(123)
 torch.backends.cudnn.deterministic = True
@@ -14,22 +15,20 @@ market_kwargs = dict(start_volumes=10,
                      deprecation_steps=5,
                      max_price=100)
 prod_functions = [
-    BatchedLeontief(torch.tensor([0, 1, 1]), torch.tensor([3, 0, 0]), device=device),  # 0 товара А + 1 товар  Б => 2 товара А.
-    BatchedLeontief(torch.tensor([1, 0, 1]), torch.tensor([0, 3, 0]), device=device),  # 0 товара А + 1 товар  Б => 2 товара А.
-    BatchedLeontief(torch.tensor([1, 1, 0]), torch.tensor([0, 0, 3]), device=device),  # 0 товара А + 1 товар  Б => 2 товара А.
+    BatchedLeontief(torch.tensor([0, 1]), torch.tensor([2, 0]), device=device),  # 0 товара А + 1 товар  Б => 2 товара А.
+    BatchedLeontief(torch.tensor([1, 0]), torch.tensor([0, 2]), device=device),  # 1 товара А + 0 товара Б => 2 товара Б
 ]
 
 # Инвестиционные функции
 invest_functions = [
-    BatchedLeontief(torch.tensor([0, 0, 2]), torch.tensor(2), device=device),
-    BatchedLeontief(torch.tensor([0, 0, 2]), torch.tensor(2), device=device),
-    BatchedLeontief(torch.tensor([0, 0, 2]), torch.tensor(2), device=device),
+    BatchedLeontief(torch.tensor([1, 1]), torch.tensor(2), device=device),
+    BatchedLeontief(torch.tensor([1, 1]), torch.tensor(2), device=device),
 ]
 env = BatchedEnvironment(market_kwargs,
                          BetaPolicyNetwork,
                          prod_functions,
                          invest_functions=invest_functions,
-                         target='finance',
+                         target='production',
                          percent_prices=False,
                          production_reg=0,  # 10 is good
                          device=device,
@@ -40,12 +39,11 @@ trainer = TrainerPPO(env,
                      entropy_reg=0.01,
                      buffer_size=8192 * 64,
                      device=device,
-                     shared_weights=False,
                      entropy_gamma=0.999,
                      lr_gamma=0.991,
                      )
 # trainer.train_epoch(1)
-# trainer.train(1, episode_length=32, debug_period=10, shuffle_order=True)
+trainer.train(32, episode_length=32, debug_period=10, shuffle_order=True)
 env.change_batch_size(32)
 env.reset()
 n_periods = 96

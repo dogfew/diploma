@@ -18,7 +18,7 @@ mpl.rcParams.update({
     "legend.fontsize": 10,
     "font.family": "serif",
     "xtick.labelsize": 9,
-    "ytick.labelsize": 9,
+    "ytick.labelsize": 10,
     "pgf.preamble": r"""
 \usepackage[T2A]{fontenc}
 \usepackage[utf8]{inputenc}
@@ -75,6 +75,7 @@ def plot_actions_batch(agent_actions_history, title='', mode='mean', num=0):
     sns.heatmap(combined_data,
                 annot=False,
                 cmap=colormap,
+                vmin=0, vmax=1,
                 cbar=False,
                 yticklabels=yticklabels)
     plt.hlines(np.arange(1, len(yticklabels)),
@@ -83,6 +84,7 @@ def plot_actions_batch(agent_actions_history, title='', mode='mean', num=0):
                linestyles='solid',
                linewidth=1,
                )
+    #plt.clim(0, 1)
     plt.xlabel("Шаг")
     plt.ylabel("")
     plt.yticks(rotation=0)
@@ -91,7 +93,7 @@ def plot_actions_batch(agent_actions_history, title='', mode='mean', num=0):
     plt.savefig(f'{PICS_DIRECTORY}/actions_{title}_{num}.pgf')
 
 
-def plot_volumes_batch(env_history, confidence=0.75, alpha=0.5, window_size=5, num=0):
+def plot_volumes_batch(env_history, confidence=0.8, alpha=0.5, window_size=5, num=0):
     volumes = np.stack([x['volume_matrix'] for x in env_history])  # .T
     reserves = np.stack([x['reserves'] for x in env_history]).transpose(0, 2, 1, 3)
     total = (volumes + reserves).sum(axis=2)
@@ -140,7 +142,7 @@ def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5
                              )
     fig.subplots_adjust(left=0.08)
     for ax in axes.flatten():
-        ax.tick_params(axis='y', which='both', pad=0)
+        ax.tick_params(axis='y', which='both', pad=0, labelsize=7)
     colors = plt.cm.get_cmap('Set1').colors
 
     def plot_data(ax, data, item_index, title, logscale=False):
@@ -195,7 +197,7 @@ def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5
     fig, ax = plt.subplots(1, ncols, figsize=(3 * ncols, 3.5))
     ax = np.atleast_1d(ax)
     for i in range(finances_mean.shape[1]):
-        data_ma = uniform_filter1d(finances_mean[:, i], size=window_size, axis=0, mode='nearest')
+        data_ma = uniform_filter1d(finances_mean[:, i], size=window_size, axis=0, mode='reflect')
 
         ax[0].plot(periods,
                    data_ma,
@@ -304,18 +306,28 @@ def plot_loss_batch(df_list, num=0):
 
 
 if __name__ == '__main__':
-    gradient = np.linspace(0, 1, 256)
-    gradient = np.vstack((gradient, gradient))
+    # gradient = np.linspace(0, 1, 256)
+    # gradient = np.vstack((gradient, gradient))
+    #
+    # fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(20, 2))
+    #
+    # axes[0].imshow(gradient, aspect='auto', cmap=colormap)
+    # axes[0].set_title('Custom Green-Yellow-Red')
+    # axes[0].axis('off')
+    #
+    # axes[1].imshow(gradient, aspect='auto', cmap='RdYlGn')
+    # axes[1].set_title('Standard RdYlGn')
+    # axes[1].axis('off')
+    #
+    # plt.tight_layout()
+    # plt.show()
+    fig, ax = plt.subplots(figsize=(6, 1))
+    fig.subplots_adjust(bottom=0.5)
+    cmap = colormap
 
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(20, 2))
+    norm = plt.Normalize(vmin=0, vmax=1)
 
-    axes[0].imshow(gradient, aspect='auto', cmap=colormap)
-    axes[0].set_title('Custom Green-Yellow-Red')
-    axes[0].axis('off')
+    cbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=ax, orientation='horizontal')
 
-    axes[1].imshow(gradient, aspect='auto', cmap='RdYlGn')
-    axes[1].set_title('Standard RdYlGn')
-    axes[1].axis('off')
-
-    plt.tight_layout()
-    plt.show()
+    plt.savefig(f'../{PICS_DIRECTORY}/colorbar.pgf')
+    plt.close()
