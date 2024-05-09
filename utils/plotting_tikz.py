@@ -33,8 +33,36 @@ colors = np.vstack((
 )  # [::-1]
 
 colormap = LinearSegmentedColormap.from_list("green_to_red", colors)
-colormap = 'RdYlGn'
+cdict = {
+    'red': ((0.0, 0.4, 0.4),
+            (0.02, 0.6, 0.6),
+            (0.03, 0.7, 0.7),
+            (0.05, 0.8, 0.8),
+            (0.1, 0.9, 0.9),
+            (0.2, 1.0, 1.0),
+            (0.5, 1.0, 1.0),
+            (1.0, 0.0, 0.0)),
 
+    'green': ((0.0, 0.0, 0.0),
+              (0.02, 0.0, 0.0),
+              (0.03, 0.0, 0.0),
+              (0.05, 0.0, 0.0),
+              (0.1, 0.0, 0.0),
+              (0.2, 0.3, 0.3),
+              (0.5, 1.0, 1.0),
+              (1.0, 0.5, 0.5)),
+
+    'blue': ((0.0, 0.0, 0.0),
+             (0.02, 0.0, 0.0),
+             (0.03, 0.0, 0.0),
+             (0.05, 0.0, 0.0),
+             (0.1, 0.0, 0.0),
+             (0.2, 0.0, 0.0),
+             (0.5, 0.0, 0.0),
+             (1.0, 0.0, 0.0))
+}
+
+colormap = LinearSegmentedColormap('Custom_RdYlGn', cdict)
 PICS_DIRECTORY = 'pics'
 
 
@@ -84,13 +112,13 @@ def plot_actions_batch(agent_actions_history, title='', mode='mean', num=0):
                linestyles='solid',
                linewidth=1,
                )
-    #plt.clim(0, 1)
+    # plt.clim(0, 1)
     plt.xlabel("Шаг")
     plt.ylabel("")
     plt.yticks(rotation=0)
     # plt.gca().set_yticklabels(plt.gca().get_yticklabels())
     # plt.gca().tick_params(axis='y', which='major')
-    plt.savefig(f'{PICS_DIRECTORY}/actions_{title}_{num}.pgf')
+    plt.savefig(f'{PICS_DIRECTORY}/actions_{title}_{num}.pgf', bbox_inches='tight')
 
 
 def plot_volumes_batch(env_history, confidence=0.8, alpha=0.5, window_size=5, num=0):
@@ -103,7 +131,10 @@ def plot_volumes_batch(env_history, confidence=0.8, alpha=0.5, window_size=5, nu
     total_h = total.std(axis=1) * common
     plt.figure(figsize=(6, 3.5))
     for commodity in range(total_h.shape[1]):
-        data_ma = uniform_filter1d(total_mean[:, commodity], size=window_size, axis=0, mode='nearest')
+        data_ma = uniform_filter1d(total_mean[:, commodity],
+                                   size=window_size,
+                                   axis=0,
+                                   mode='nearest')
         plt.plot(data_ma,
                  label=f'Товар {commodity + 1}',
                  path_effects=[withStroke(linewidth=2, foreground='black')],
@@ -116,8 +147,8 @@ def plot_volumes_batch(env_history, confidence=0.8, alpha=0.5, window_size=5, nu
         )
     plt.xlabel('Шагов')
     plt.ylabel('Общий объём')
-    plt.legend()
-    plt.savefig(f'{PICS_DIRECTORY}/volumes_{num}.pgf')
+    plt.legend(loc='best', title='')
+    plt.savefig(f'{PICS_DIRECTORY}/volumes_{num}.pgf', bbox_inches='tight')
 
 
 def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5, num=0):
@@ -126,7 +157,8 @@ def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5
 
     prices = np.stack([x['price_matrix'] for x in data]).transpose(2, 3, 1, 0)
     volumes = np.stack([x['volume_matrix'] for x in data]).transpose(2, 3, 1, 0)
-    reserves = np.stack([x['reserves'] for x in data]).transpose(2, 3, 1, 0)
+    reserves = np.stack([x['reserves'].transpose(1, 0, 2) for x in data]).transpose(2, 3, 1, 0)
+    assert reserves.shape == volumes.shape
     finances = np.stack([x['finance'] for x in data]).transpose(0, 2, 1)
     finances = uniform_filter1d(finances, size=window_size, axis=0, mode='nearest')
     periods = np.arange(len(data))
@@ -190,14 +222,15 @@ def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5
                 handles.append(handle)
                 labels.append(label)
 
-    # fig.legend(handles, labels, loc='lower left', bbox_to_anchor=(1.1, 1), title='Легенда')
+    fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, -0.1), title='', ncols=2)
     plt.subplots_adjust(right=1)
-    plt.savefig(f'{PICS_DIRECTORY}/timedata_{num}.pgf')
+    plt.savefig(f'{PICS_DIRECTORY}/timedata_{num}.pgf', bbox_inches='tight')
     ncols = 1 + ('limits' in data[0].keys())
-    fig, ax = plt.subplots(1, ncols, figsize=(3 * ncols, 3.5))
+    fig, ax = plt.subplots(1, ncols, figsize=(3 * ncols, 3))
     ax = np.atleast_1d(ax)
     for i in range(finances_mean.shape[1]):
-        data_ma = uniform_filter1d(finances_mean[:, i], size=window_size, axis=0, mode='reflect')
+        data_ma = uniform_filter1d(
+            finances_mean[:, i], size=window_size, axis=0, mode='wrap')
 
         ax[0].plot(periods,
                    data_ma,
@@ -216,8 +249,8 @@ def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5
         )
     ax[0].set_title('Финансы')
     ax[0].set_xlabel('Период')
-    ax[0].set_ylabel('')
-    # ax[0].legend()
+    fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, -0.2), title='', ncols=2)
+    fig.subplots_adjust(right=1)
     ax[0].grid(True)
     if ncols == 2:
         limits = np.stack([x['limits'] for x in data]).mean(axis=2).transpose(1, 0, 2)  #
@@ -242,7 +275,7 @@ def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5
         ax[1].set_ylabel('')
         # ax[1].legend()
         ax[1].grid(True)
-    plt.savefig(f'{PICS_DIRECTORY}/timedata2_{num}.pgf')
+    plt.savefig(f'{PICS_DIRECTORY}/timedata2_{num}.pgf', bbox_inches='tight')
 
 
 def plot_loss_batch(df_list, num=0):
@@ -254,21 +287,21 @@ def plot_loss_batch(df_list, num=0):
         ax[0, 0].plot(
             group["episode"],
             group["actor_loss"],
-            label=f"Firm {firm_id}",
+            label=f"Фирма {firm_id + 1}",
             path_effects=[withStroke(linewidth=2, foreground='black')],
             color=color,
         )
         ax[0, 1].plot(
             group["episode"],
             group["critic_loss"],
-            label=f"Firm {firm_id}",
+            label=f"Фирма {firm_id + 1}",
             path_effects=[withStroke(linewidth=2, foreground='black')],
             color=color,
         )
         ax[1, 0].plot(
             group["episode"],
             group["reward"],
-            label=f"Firm {firm_id}",
+            label=f"Фирма {firm_id + 1}",
             path_effects=[withStroke(linewidth=2, foreground='black')],
             color=color,
         )
@@ -276,33 +309,39 @@ def plot_loss_batch(df_list, num=0):
         ax[1, 1].plot(
             group["episode"],
             group["entropy_loss"],
-            label=f"Фирма {firm_id}",
+            label=f"Фирма {firm_id + 1}",
             path_effects=[withStroke(linewidth=2, foreground='black')],
             color=color,
         )
 
     ax[0, 0].set_xlabel("Эпоха")
-    ax[0, 0].set_title("Actor Loss")
+    ax[0, 0].set_title("Потери актора $\mathcal{L}^A$")
     ax[0, 0].grid(True)
 
     ax[0, 1].set_xlabel("Эпоха")
-    ax[0, 1].set_title("Critic Loss")
+    ax[0, 1].set_title("Потери критика $\mathcal{L}^C$")
     ax[0, 1].grid(True)
 
     ax[1, 0].set_xlabel("Эпоха")
     ax[1, 0].set_title("Средняя награда")
     # ax[1, 0].legend()
     ax[1, 0].grid(True)
-    ax[1, 0].axhline(y=0, color="grey", linestyle="--", label="Zero Profit")
+    ax[1, 0].axhline(y=0, color="grey", linestyle="--")
     #
     ax[1, 1].set_xlabel("Эпоха")
-    ax[1, 1].set_title("Entropy Loss")
+    ax[1, 1].set_title("Энтропийный штраф")
     # ax[1, 1].legend()
     ax[1, 1].grid(True)
-    #
+    handles, labels = [], []
+    for ax in fig.axes:
+        for handle, label in zip(*ax.get_legend_handles_labels()):
+            if label not in labels:
+                handles.append(handle)
+                labels.append(label)
+    fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, -0.1), title='', ncols=2)
     plt.tight_layout()
     # plt.show()
-    plt.savefig(f'{PICS_DIRECTORY}/loss_{num}.pgf')
+    plt.savefig(f'{PICS_DIRECTORY}/loss_{num}.pgf', bbox_inches='tight')
 
 
 if __name__ == '__main__':
@@ -329,5 +368,5 @@ if __name__ == '__main__':
 
     cbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=ax, orientation='horizontal')
 
-    plt.savefig(f'../{PICS_DIRECTORY}/colorbar.pgf')
+    plt.savefig(f'../{PICS_DIRECTORY}/colorbar.pgf', bbox_inches='tight')
     plt.close()

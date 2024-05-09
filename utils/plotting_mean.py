@@ -10,13 +10,45 @@ from scipy.ndimage import uniform_filter1d
 
 sample = 32
 colors = np.vstack((
-plt.get_cmap("YlOrBr", sample)(np.linspace(0, 1, sample))[::-1],
-plt.get_cmap("YlGn", sample)(np.linspace(0, 1, sample)),
+    plt.get_cmap("YlOrBr", sample)(np.linspace(0, 1, sample))[::-1],
+    plt.get_cmap("YlGn", sample)(np.linspace(0, 1, sample)),
 )
-)#[::-1]
+)  # [::-1]
 
 colormap = LinearSegmentedColormap.from_list("green_to_red", colors)
 colormap = 'RdYlGn'
+cdict = {
+    'red':   ((0.0, 0.4, 0.4),
+             (0.02, 0.6, 0.6),
+             (0.03, 0.7, 0.7),
+             (0.05, 0.8, 0.8),
+             (0.1, 0.9, 0.9),
+             (0.2, 1.0, 1.0),
+             (0.5, 1.0, 1.0),
+             (1.0, 0.0, 0.0)),
+
+    'green': ((0.0, 0.0, 0.0),
+              (0.02, 0.0, 0.0),
+              (0.03, 0.0, 0.0),
+              (0.05, 0.0, 0.0),
+              (0.1, 0.0, 0.0),
+              (0.2, 0.3, 0.3),
+              (0.5, 1.0, 1.0),
+              (1.0, 0.3, 0.3)),
+
+    'blue':  ((0.0, 0.0, 0.0),
+              (0.02, 0.0, 0.0),
+              (0.03, 0.0, 0.0),
+              (0.05, 0.0, 0.0),
+              (0.1, 0.0, 0.0),
+              (0.2, 0.0, 0.0),
+              (0.5, 0.0, 0.0),
+              (1.0, 0.0, 0.0))
+}
+
+
+colormap = LinearSegmentedColormap('Custom_RdYlGn', cdict)
+
 
 def plot_actions_batch(agent_actions_history, title='', mode='mean'):
     data = agent_actions_history
@@ -176,7 +208,7 @@ def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5
         data_ma = uniform_filter1d(finances_mean[:, i],
                                    size=window_size,
                                    axis=0,
-                                   mode='mirror')
+                                   mode='wrap')
 
         ax[0].plot(periods,
                    data_ma,
@@ -207,7 +239,7 @@ def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5
                        color=colors[i],
                        linewidth=2,
                        path_effects=[withStroke(linewidth=2, foreground='black')]
-)
+                       )
             ax[1].fill_between(
                 periods,
                 (limits[i] - limits_h[i]).flatten(),

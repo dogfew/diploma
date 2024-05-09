@@ -82,9 +82,7 @@ class BaseTrainer:
               n_epochs,
               episode_length=100,
               debug_period=5,
-              shuffle_order=False,
-              plot_latex=True,
-              num=0):
+              shuffle_order=False):
         """
         :param n_epochs: Number of Epochs to train model
         :param episode_length: Number of environment full steps per epoch
@@ -98,7 +96,7 @@ class BaseTrainer:
             df = self.train_epoch(max_episode_length=episode_length, order=order)
             df["episode"] = self.episode
             self.df_list.append(df)
-            if self.episode % debug_period == 0:
+            if self.episode % debug_period == 0 and debug_period < n_epochs:
                 self.plot_loss(self.df_list)
             self.episode += 1
             if shuffle_order:
@@ -109,7 +107,8 @@ class BaseTrainer:
                     "Order": str(order),
                 }
             )
-        self.plot_loss(self.df_list)
+        if debug_period < n_epochs:
+            self.plot_loss(self.df_list)
 
     @torch.no_grad()
     def plot_loss(self, df_list) -> None:
