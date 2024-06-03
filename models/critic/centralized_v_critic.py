@@ -14,7 +14,9 @@ class CentralizedCriticV(nn.Module):
     def __init__(self,
                  state_dim,
                  n_agents=2,
-                 hidden_dim=64):
+                 hidden_dim=64,
+                 social_planner=False,
+                 ):
         super().__init__()
         self.net = nn.Sequential(
             orthogonal_init(nn.Linear(n_agents * state_dim, hidden_dim)),
@@ -23,6 +25,7 @@ class CentralizedCriticV(nn.Module):
             nn.Tanh(),
             orthogonal_init(nn.Linear(hidden_dim, n_agents), std=1.),
         )
+        self.social_planner = social_planner
 
     def __call__(self, state):
         """
@@ -33,4 +36,7 @@ class CentralizedCriticV(nn.Module):
             state = state.unsqueeze(0)
         batch_size, n_agents, features = state.shape
         state_flatten = state.reshape(batch_size, n_agents * features)
-        return self.net(state_flatten)
+        out = self.net(state_flatten)
+        if self.social_planner:
+            out = out.mean(dim=-1, keepdim=True).repeat(1, out.shape[-1])
+        return out

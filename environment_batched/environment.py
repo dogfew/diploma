@@ -1,12 +1,7 @@
 import math
-from typing import Optional
 import numpy as np
 import torch
-import torch.nn as nn
 from copy import deepcopy
-
-from tensordict import TensorDictBase, TensorDict
-
 from .market import BatchedMarket
 from .firm import BatchedFirm, BatchedLimitFirm, BatchedLimitProductionFirm, BatchedProductionFirm
 from .utils import get_state_log, get_state_dim, get_action_dim, process_actions, get_log_probs_dim
@@ -231,8 +226,8 @@ class BatchedEnvironment:
         else:
             percent_to_use = percent_to_use.reshape(
                 self.batch_size, self.market.n_branches, 2)
-            percent_to_use = torch.cat([percent_to_use, 1 - percent_to_use.sum(dim=-1, keepdim=True)], dim=-1).clamp(
-                1e-6, 1 - 1e-6)
+            percent_to_use = torch.cat([percent_to_use, 1. - percent_to_use.sum(dim=-1, keepdim=True)], dim=-1).clamp(
+                1e-7, 1 - 1e-7)
         return (percent_to_buy,
                 percent_to_sale,
                 percent_to_use,

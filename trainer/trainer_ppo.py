@@ -34,6 +34,7 @@ class TrainerPPO(BaseTrainer):
             entropy_gamma=0.999,
             max_grad_norm=0.5,
             shared_weights=True,
+            social_planner=False,
             normalize_advantages=True,
             common_optimizer=True,
             critic_loss=F.smooth_l1_loss,
@@ -74,7 +75,8 @@ class TrainerPPO(BaseTrainer):
             self.critic = CentralizedCriticV(
                 state_dim=state_dim,
                 n_agents=n_firms,
-                hidden_dim=critic_hidden_dim
+                hidden_dim=critic_hidden_dim,
+                social_planner=social_planner
             ).to(device)
             self.critic_optimizer = torch.optim.Adam(
                 self.critic.parameters(), lr=critic_lr, weight_decay=0
@@ -87,7 +89,8 @@ class TrainerPPO(BaseTrainer):
                 CentralizedCriticV(
                     state_dim=state_dim,
                     n_agents=n_firms,
-                    hidden_dim=critic_hidden_dim
+                    hidden_dim=critic_hidden_dim,
+                    social_planner=social_planner
                 ).to(device) for _ in self.policies
             ]
             self.critic_optimizers = [
@@ -122,7 +125,10 @@ class TrainerPPO(BaseTrainer):
             torch.optim.lr_scheduler.ExponentialLR(actor_optimizer, gamma=lr_gamma)
             for actor_optimizer in self.actor_optimizers
         ]
-
+        self.actor_schedulers = [
+            torch.optim.lr_scheduler.ReduceLROnPlateau(actor_optimizer, mode='max', factor=0.33)
+            for actor_optimizer in self.actor_optimizers
+        ]
         # Hyperparams
         self.common_optimizer = common_optimizer
         self.normalize_advantages = normalize_advantages
@@ -208,14 +214,16 @@ class TrainerPPO(BaseTrainer):
                             "firm_id": firm_id,
                         }
                     )
-        for actor_scheduler in self.actor_schedulers:
-            actor_scheduler.step()
+        rewards = rewards_lst.mean(dim=(0, 2)).flatten().cpu().numpy()
+
+        for actor_scheduler, reward in zip(self.actor_schedulers, rewards):
+            actor_scheduler.step(reward)
         if not self.common_optimizer:
             self.critic_scheduler.step()
         self.entropy_reg *= self.entropy_gamma
 
         df_out = pd.DataFrame(history).groupby("firm_id").mean()
-        df_out['reward'] = rewards_lst.mean(dim=(0, 2)).flatten().cpu().numpy()
+        df_out['reward'] = rewards
         return df_out
 
     def get_critic_output(self, state):

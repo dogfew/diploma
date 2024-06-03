@@ -134,6 +134,7 @@ class BetaPolicyNetwork(nn.Module):
         use_params = self.use(x)
         prices_params = self.prices(x)
 
+        percent_to_use = percent_to_use / percent_to_use.sum(dim=-1, keepdim=True)
         log_probs = (
             Dirichlet(buy_params).log_prob(percent_to_buy).unsqueeze(-1),
             Beta(sale_params[..., 0], sale_params[..., 1]).log_prob(percent_to_sale),

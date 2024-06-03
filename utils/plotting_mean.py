@@ -130,7 +130,8 @@ def plot_environment_batch(env_history, confidence=0.8, alpha=0.5, window_size=5
 
     prices = np.stack([x['price_matrix'] for x in data]).transpose(2, 3, 1, 0)
     volumes = np.stack([x['volume_matrix'] for x in data]).transpose(2, 3, 1, 0)
-    reserves = np.stack([x['reserves'] for x in data]).transpose(2, 3, 1, 0)
+    reserves = np.stack([x['reserves'].transpose(1, 0, 2) for x in data]).transpose(2, 3, 1, 0)
+    assert reserves.shape == volumes.shape
     finances = np.stack([x['finance'] for x in data]).transpose(0, 2, 1)
     finances = uniform_filter1d(finances, size=window_size, axis=0, mode='nearest')
     periods = np.arange(len(data))

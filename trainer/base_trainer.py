@@ -246,10 +246,21 @@ class BaseTrainer:
         pickle.dump(self, open(filename, "wb"))
 
     @torch.no_grad()
-    def _clip_grad_norm(self, model, norm_type=2):
+    def _clip_grad_norm(self, parameters, norm_type=2):
         try:
+            for param in parameters:
+                if torch.isnan(param.grad).any():
+                    param.grad = torch.where(torch.isnan(param.grad),
+                                             torch.zeros_like(param.grad),
+                                             param.grad)
+                    print(param.shape)
+                    print(param.min().item(), param.max().item())
+            # nn.utils.clip_grad_value_(
+            #     parameters,
+            #     self.max_grad_norm,
+            # )
             nn.utils.clip_grad_norm_(
-                model,
+                parameters,
                 self.max_grad_norm,
                 norm_type=norm_type,
                 error_if_nonfinite=True,

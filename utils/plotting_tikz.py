@@ -112,12 +112,9 @@ def plot_actions_batch(agent_actions_history, title='', mode='mean', num=0):
                linestyles='solid',
                linewidth=1,
                )
-    # plt.clim(0, 1)
     plt.xlabel("Шаг")
     plt.ylabel("")
     plt.yticks(rotation=0)
-    # plt.gca().set_yticklabels(plt.gca().get_yticklabels())
-    # plt.gca().tick_params(axis='y', which='major')
     plt.savefig(f'{PICS_DIRECTORY}/actions_{title}_{num}.pgf', bbox_inches='tight')
 
 
