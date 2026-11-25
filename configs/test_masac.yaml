@@ -1,0 +1,54 @@
+experiment_name: "production_experiment_masac_v1"
+device: "cpu"
+seed: 888
+
+market:
+  start_volumes: s10
+  base_price: 50
+  start_gains: 500
+  deprecation_steps: 2
+  min_price: 1
+  max_price: 100
+
+production_functions:
+  - type: "Leontief"
+    inputs: [0, 4]
+    outputs: [5, 0]
+  - type: "Leontief"
+    inputs: [4, 0]
+    outputs: [0, 5]
+
+investment_functions:
+  - type: "Leontief"
+    inputs: [1, 1]
+    outputs: [2]
+  - type: "Leontief"
+    inputs: [1, 1]
+    outputs: [2]
+
+environment:
+  policy_class: "BetaPolicyNetwork"
+  target: "production"
+  percent_prices: false
+  production_reg: 0
+  is_blind: true
+  batch_size: 512
+
+trainer:
+  trainer_class: "TrainerMASAC"
+  learning_rates: [0.003, 0.0003]
+  entropy_reg: -8
+  max_grad_norm: 1.0
+  buffer_size: 65536
+  lr_gamma: 0.998
+
+training_params:
+  n_epochs: 1024
+  episode_length: 32
+  debug_period: 20
+  debug_period: 20
+  shuffle_order: false
+
+evaluation:
+  n_periods: 128
+  eval_batch_size: 512

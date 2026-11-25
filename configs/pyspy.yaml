@@ -1,0 +1,60 @@
+experiment_name: "production_experiment_v1 (hd: 128)"
+device: "cpu"
+seed: 999
+
+market:
+  start_volumes: 10
+  base_price: 2
+  start_gains: 64
+  deprecation_steps: 2
+  min_price: 1
+  max_price: 8
+
+prod_functions:
+  - type: "Leontief"
+    inputs: [0, 4]
+    outputs: [5, 0]
+  - type: "Leontief"
+    inputs: [4, 0]
+    outputs: [0, 5]
+
+invest_functions:
+  - type: "Leontief"
+    inputs: [1, 1]
+    outputs: 2
+  - type: "Leontief"
+    inputs: [1, 1]
+    outputs: 2
+
+environment:
+  policy_class: "BetaPolicyNetwork"
+  # policy_class: "LogisticNormalPolicyNetwork"
+  target: "production"
+  percent_prices: false
+  production_reg: 0
+  is_blind: true
+  batch_size: 512
+  hidden_dim: 128
+  social_planner: false
+
+trainer:
+  trainer_class: "TrainerPPO"
+  learning_rates: [0.0003, 0.001]
+  entropy_reg: 0.005
+  max_grad_norm: 1
+  entropy_gamma: 0.9999
+  shared_weights: true
+  normalize_advantages: true
+  critic_hidden_dim: 256
+  cliprange: 0.2
+  batch_size: 4096
+
+training_params:
+  n_epochs: 300
+  episode_length: 24
+  debug_period: 9999999
+  shuffle_order: false
+
+evaluation:
+  n_periods: 0
+  eval_batch_size: 1024

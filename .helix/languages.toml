@@ -1,0 +1,25 @@
+[language-server.ruff.config.settings.lint]
+# extendSelect = ["B", "SIM", "UP", "I", "C4", "PIE", "RET", "RUF", "ARG", "PTH", "TC", "A"]
+extendSelect = ["ALL"]
+# preview=true
+unsafe-fixes=true
+ignore = [
+  "ERA",  # commented code
+  "G",    # logging RULES
+  "D",    # docstring rules
+  "ANN",  # обязательные type annotations везде
+  "T20",
+  "S101", # use of assert
+  "S105",
+  "S107",
+  "S311",
+  "RUF002",
+  "RUF003",
+  "CPY001"
+]
+
+[language-server.ruff.config.settings]
+lineLength = 110
+
+fixAll = true
+organizeImports = false
